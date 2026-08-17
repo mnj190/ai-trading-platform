@@ -4,6 +4,7 @@ public record ExecutionSyncReport(
 		int receivedFills,
 		int recordedFills,
 		int skippedUnknownOrders,
-		int skippedNonSubmittedOrders
+		int skippedNonSubmittedOrders,
+		int skippedAlreadyUpToDate
 ) {
 }

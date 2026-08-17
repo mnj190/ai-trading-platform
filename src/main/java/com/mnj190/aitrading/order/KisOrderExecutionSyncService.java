@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class KisOrderExecutionSyncService {
@@ -36,6 +37,7 @@ public class KisOrderExecutionSyncService {
 		int recorded = 0;
 		int unknown = 0;
 		int nonSubmitted = 0;
+		int alreadyUpToDate = 0;
 
 		for (KisOrderExecutionFill fill : fills) {
 			OrderHistory order = orderHistoryRepository.findByBrokerOrderId(fill.brokerOrderId())
@@ -44,19 +46,24 @@ public class KisOrderExecutionSyncService {
 				unknown++;
 				continue;
 			}
-			if (order.getStatus() != OrderStatus.SUBMITTED) {
+			if (order.getStatus() != OrderStatus.SUBMITTED && order.getStatus() != OrderStatus.PARTIALLY_FILLED) {
 				nonSubmitted++;
 				continue;
 			}
-			tradeExecutionService.recordFill(new TradeExecutionCommand(
+			Optional<TradeHistory> trade = tradeExecutionService.recordFill(new TradeExecutionCommand(
 					order.getId(),
-					fill.executedQuantity(),
+					fill.cumulativeExecutedQuantity(),
 					fill.executedPrice(),
 					fill.executedAt()
 			));
-			recorded++;
+			if (trade.isPresent()) {
+				recorded++;
+			}
+			else {
+				alreadyUpToDate++;
+			}
 		}
 
-		return new ExecutionSyncReport(fills.size(), recorded, unknown, nonSubmitted);
+		return new ExecutionSyncReport(fills.size(), recorded, unknown, nonSubmitted, alreadyUpToDate);
 	}
 }

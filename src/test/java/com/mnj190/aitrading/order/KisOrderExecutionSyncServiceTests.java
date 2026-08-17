@@ -36,7 +36,9 @@ class KisOrderExecutionSyncServiceTests {
 	@Test
 	void syncsKisExecutionFillIntoTradeAndPosition() {
 		String strategyVersion = "PE_MEAN_REVERSION_V1_KIS_SYNC_TEST";
-		OrderHistory order = orderHistoryRepository.saveAndFlush(submittedBuyOrder(strategyVersion));
+		OrderHistory order = orderHistoryRepository.saveAndFlush(
+				submittedBuyOrder(strategyVersion, new BigDecimal("2.000000"))
+		);
 
 		ExecutionSyncReport report = syncService.sync(new KisOverseasOrderExecutionResponse(
 						"0",
@@ -45,6 +47,7 @@ class KisOrderExecutionSyncServiceTests {
 						List.of(Map.of(
 								"odno", "0000000001",
 								"pdno", "NVDA",
+								"ft_ord_qty", "2",
 								"ft_ccld_qty", "2",
 								"ft_ccld_unpr3", "180.1200"
 						)),
@@ -54,7 +57,7 @@ class KisOrderExecutionSyncServiceTests {
 				OffsetDateTime.parse("2026-08-18T22:10:00+09:00")
 		);
 
-		assertThat(report).isEqualTo(new ExecutionSyncReport(1, 1, 0, 0));
+		assertThat(report).isEqualTo(new ExecutionSyncReport(1, 1, 0, 0, 0));
 		assertThat(tradeHistoryRepository.findByOrder_IdOrderByExecutedAtAsc(order.getId())).hasSize(1);
 		assertThat(orderHistoryRepository.findById(order.getId()).orElseThrow().getStatus())
 				.isEqualTo(OrderStatus.FILLED);
@@ -67,8 +70,10 @@ class KisOrderExecutionSyncServiceTests {
 	@Test
 	void skipsUnknownAndAlreadyProcessedOrders() {
 		String strategyVersion = "PE_MEAN_REVERSION_V1_KIS_SKIP_TEST";
-		OrderHistory filledOrder = orderHistoryRepository.saveAndFlush(submittedBuyOrder(strategyVersion));
-		filledOrder.markFilled();
+		OrderHistory filledOrder = orderHistoryRepository.saveAndFlush(
+				submittedBuyOrder(strategyVersion, new BigDecimal("2.000000"))
+		);
+		filledOrder.applyCumulativeFillDelta(new BigDecimal("2.000000"));
 		orderHistoryRepository.saveAndFlush(filledOrder);
 
 		ExecutionSyncReport report = syncService.sync(new KisOverseasOrderExecutionResponse(
@@ -79,12 +84,14 @@ class KisOrderExecutionSyncServiceTests {
 								Map.of(
 										"odno", "0000000001",
 										"pdno", "NVDA",
+										"ft_ord_qty", "2",
 										"ft_ccld_qty", "2",
 										"ft_ccld_unpr3", "180.1200"
 								),
 								Map.of(
 										"odno", "unknown-order",
 										"pdno", "AAPL",
+										"ft_ord_qty", "1",
 										"ft_ccld_qty", "1",
 										"ft_ccld_unpr3", "200.0000"
 								)
@@ -95,10 +102,89 @@ class KisOrderExecutionSyncServiceTests {
 				OffsetDateTime.parse("2026-08-18T22:10:00+09:00")
 		);
 
-		assertThat(report).isEqualTo(new ExecutionSyncReport(2, 0, 1, 1));
+		assertThat(report).isEqualTo(new ExecutionSyncReport(2, 0, 1, 1, 0));
 	}
 
-	private OrderHistory submittedBuyOrder(String strategyVersion) {
+	@Test
+	void recordsPartialFillOnFirstSyncThenCompletesOnSecondSync() {
+		String strategyVersion = "PE_MEAN_REVERSION_V1_KIS_PARTIAL_SYNC_TEST";
+		orderHistoryRepository.saveAndFlush(
+				submittedBuyOrder(strategyVersion, new BigDecimal("5.000000"))
+		);
+
+		ExecutionSyncReport firstReport = syncService.sync(new KisOverseasOrderExecutionResponse(
+						"0",
+						"APBK0013",
+						"정상처리 되었습니다.",
+						List.of(Map.of(
+								"odno", "0000000001",
+								"pdno", "NVDA",
+								"ft_ord_qty", "5",
+								"ft_ccld_qty", "2",
+								"ft_ccld_unpr3", "180.0000"
+						)),
+						"",
+						""
+				),
+				OffsetDateTime.parse("2026-08-18T22:10:00+09:00")
+		);
+		assertThat(firstReport).isEqualTo(new ExecutionSyncReport(1, 1, 0, 0, 0));
+
+		OrderHistory order = orderHistoryRepository.findByBrokerOrderId("0000000001").orElseThrow();
+		assertThat(order.getStatus()).isEqualTo(OrderStatus.PARTIALLY_FILLED);
+
+		ExecutionSyncReport secondReport = syncService.sync(new KisOverseasOrderExecutionResponse(
+						"0",
+						"APBK0013",
+						"정상처리 되었습니다.",
+						List.of(Map.of(
+								"odno", "0000000001",
+								"pdno", "NVDA",
+								"ft_ord_qty", "5",
+								"ft_ccld_qty", "5",
+								"ft_ccld_unpr3", "181.0000"
+						)),
+						"",
+						""
+				),
+				OffsetDateTime.parse("2026-08-18T22:20:00+09:00")
+		);
+		assertThat(secondReport).isEqualTo(new ExecutionSyncReport(1, 1, 0, 0, 0));
+		assertThat(orderHistoryRepository.findByBrokerOrderId("0000000001").orElseThrow().getStatus())
+				.isEqualTo(OrderStatus.FILLED);
+		assertThat(tradeHistoryRepository.findByOrder_IdOrderByExecutedAtAsc(order.getId())).hasSize(2);
+	}
+
+	@Test
+	void skipsAlreadyUpToDateFillWhenNoNewExecutionSinceLastSync() {
+		String strategyVersion = "PE_MEAN_REVERSION_V1_KIS_NOOP_SYNC_TEST";
+		orderHistoryRepository.saveAndFlush(
+				submittedBuyOrder(strategyVersion, new BigDecimal("5.000000"))
+		);
+
+		KisOverseasOrderExecutionResponse response = new KisOverseasOrderExecutionResponse(
+				"0",
+				"APBK0013",
+				"정상처리 되었습니다.",
+				List.of(Map.of(
+						"odno", "0000000001",
+						"pdno", "NVDA",
+						"ft_ord_qty", "5",
+						"ft_ccld_qty", "2",
+						"ft_ccld_unpr3", "180.0000"
+				)),
+				"",
+				""
+		);
+
+		ExecutionSyncReport firstReport = syncService.sync(response, OffsetDateTime.parse("2026-08-18T22:10:00+09:00"));
+		assertThat(firstReport).isEqualTo(new ExecutionSyncReport(1, 1, 0, 0, 0));
+
+		ExecutionSyncReport secondReport = syncService.sync(response, OffsetDateTime.parse("2026-08-18T22:15:00+09:00"));
+		assertThat(secondReport).isEqualTo(new ExecutionSyncReport(1, 0, 0, 0, 1));
+	}
+
+	private OrderHistory submittedBuyOrder(String strategyVersion, BigDecimal submittedQuantity) {
 		OrderHistory order = new OrderHistory(
 				"NVDA",
 				OrderSide.BUY,
@@ -110,7 +196,7 @@ class KisOrderExecutionSyncServiceTests {
 				strategyVersion,
 				OffsetDateTime.parse("2026-08-18T22:00:00+09:00")
 		);
-		order.markSubmitted("0000000001");
+		order.markSubmitted("0000000001", submittedQuantity);
 		return order;
 	}
 }
