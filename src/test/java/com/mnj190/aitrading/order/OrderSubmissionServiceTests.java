@@ -1,6 +1,9 @@
 package com.mnj190.aitrading.order;
 
 import com.mnj190.aitrading.broker.KisAccessToken;
+import com.mnj190.aitrading.broker.KisApiProperties;
+import com.mnj190.aitrading.broker.KisHashKeyClient;
+import com.mnj190.aitrading.broker.KisOverseasOrderClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,9 +27,12 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 @SpringBootTest(properties = {
 		"kis.api.app-key=test-key",
 		"kis.api.app-secret=test-secret",
-		"kis.api.account-number=12345678",
-		"kis.api.account-product-code=01",
-		"kis.api.paper-trading=true"
+				"kis.api.account-number=12345678",
+				"kis.api.account-product-code=01",
+				"kis.api.paper-trading=true",
+				"trading.execution.enabled=true",
+				"trading.execution.allow-real-trading=false",
+				"trading.execution.max-order-notional-amount=500.0000"
 })
 @Transactional
 class OrderSubmissionServiceTests {
@@ -141,7 +147,7 @@ class OrderSubmissionServiceTests {
 	}
 
 	private OrderSubmissionService orderSubmissionService(RestClient.Builder restClientBuilder) {
-		var properties = new com.mnj190.aitrading.broker.KisApiProperties(
+		KisApiProperties properties = new KisApiProperties(
 				"https://openapivts.koreainvestment.com:29443",
 				"test-key",
 				"test-secret",
@@ -149,13 +155,17 @@ class OrderSubmissionServiceTests {
 				"01",
 				true
 		);
-		var hashKeyClient = new com.mnj190.aitrading.broker.KisHashKeyClient(properties, restClientBuilder);
-		var orderClient = new com.mnj190.aitrading.broker.KisOverseasOrderClient(
+		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, restClientBuilder);
+		KisOverseasOrderClient orderClient = new KisOverseasOrderClient(
 				properties,
 				hashKeyClient,
 				restClientBuilder
 		);
-		return new OrderSubmissionService(orderHistoryRepository, orderClient);
+		OrderExecutionSafetyGuard safetyGuard = new OrderExecutionSafetyGuard(
+				properties,
+				new TradingExecutionProperties(true, false, new BigDecimal("500.0000"))
+		);
+		return new OrderSubmissionService(orderHistoryRepository, orderClient, safetyGuard);
 	}
 
 	private KisAccessToken token() {

@@ -23,8 +23,9 @@ class PerNormalizationBaselineRepositoryTests {
 	@Test
 	void savesFindsAndDeletesPerNormalizationBaseline() {
 		LocalDate baseMonth = LocalDate.of(2026, 8, 1);
+		String ticker = "TEST_NVDA";
 		PerNormalizationBaseline baseline = new PerNormalizationBaseline(
-				"NVDA",
+				ticker,
 				baseMonth,
 				new BigDecimal("37.5000"),
 				60,
@@ -34,7 +35,7 @@ class PerNormalizationBaselineRepositoryTests {
 		PerNormalizationBaseline saved = repository.saveAndFlush(baseline);
 
 		assertThat(saved.getId()).isNotNull();
-		assertThat(repository.findByTickerAndBaseMonth("NVDA", baseMonth)).isPresent();
+		assertThat(repository.findByTickerAndBaseMonth(ticker, baseMonth)).isPresent();
 		assertThat(saved.getFiveYearAveragePer()).isEqualByComparingTo("37.5000");
 
 		repository.delete(saved);

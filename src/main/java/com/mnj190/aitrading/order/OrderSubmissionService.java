@@ -13,13 +13,16 @@ public class OrderSubmissionService {
 
 	private final OrderHistoryRepository orderHistoryRepository;
 	private final KisOverseasOrderClient kisOverseasOrderClient;
+	private final OrderExecutionSafetyGuard orderExecutionSafetyGuard;
 
 	public OrderSubmissionService(
 			OrderHistoryRepository orderHistoryRepository,
-			KisOverseasOrderClient kisOverseasOrderClient
+			KisOverseasOrderClient kisOverseasOrderClient,
+			OrderExecutionSafetyGuard orderExecutionSafetyGuard
 	) {
 		this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
 		this.kisOverseasOrderClient = Objects.requireNonNull(kisOverseasOrderClient);
+		this.orderExecutionSafetyGuard = Objects.requireNonNull(orderExecutionSafetyGuard);
 	}
 
 	@Transactional
@@ -32,6 +35,7 @@ public class OrderSubmissionService {
 		if (order.getStatus() != OrderStatus.REQUESTED) {
 			throw new IllegalStateException("only REQUESTED orders can be submitted");
 		}
+		orderExecutionSafetyGuard.validate(order, command);
 
 		KisOverseasOrderResponse response = kisOverseasOrderClient.placeOrder(
 				command.accessToken(),

@@ -97,6 +97,25 @@ kis:
 
 초기에는 반드시 `paper-trading: true`로 계좌 조회부터 확인한다.
 
+## 자동 주문 실행 안전장치
+
+자동 주문 제출은 `OrderExecutionSafetyGuard`를 통과해야 한다.
+
+기본값:
+
+```yaml
+trading:
+  execution:
+    enabled: false
+    allow-real-trading: false
+    max-order-notional-amount: 500.0000
+```
+
+- `trading.execution.enabled=false`이면 모의/실전 모두 주문 제출이 차단된다.
+- `kis.api.paper-trading=false`인 실전 주문은 `trading.execution.allow-real-trading=true`가 추가로 필요하다.
+- 주문 수량과 limit price를 곱한 금액이 `max-order-notional-amount`를 넘으면 제출이 차단된다.
+- 조회 API는 이 설정과 별개로 사용할 수 있다.
+
 ## 계좌 조회 결과
 
 성공하면 로그에 다음 순서가 보인다.

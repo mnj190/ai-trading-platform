@@ -24,3 +24,9 @@ kis:
     account-number: ${KIS_ACCOUNT_NUMBER}
     account-product-code: ${KIS_ACCOUNT_PRODUCT_CODE:01}
     paper-trading: ${KIS_PAPER_TRADING:false}
+
+trading:
+  execution:
+    enabled: ${TRADING_EXECUTION_ENABLED:false}
+    allow-real-trading: ${TRADING_ALLOW_REAL_TRADING:false}
+    max-order-notional-amount: ${TRADING_MAX_ORDER_NOTIONAL_AMOUNT:500.0000}
