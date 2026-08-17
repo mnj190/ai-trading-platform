@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 public class TradeExecutionService {
@@ -30,37 +31,38 @@ public class TradeExecutionService {
 	}
 
 	@Transactional
-	public TradeHistory recordFill(TradeExecutionCommand command) {
+	public Optional<TradeHistory> recordFill(TradeExecutionCommand command) {
 		Objects.requireNonNull(command, "command must not be null");
 
 		OrderHistory order = orderHistoryRepository.findById(command.orderId())
 				.orElseThrow(() -> new IllegalArgumentException("order not found: " + command.orderId()));
-		if (order.getStatus() != OrderStatus.SUBMITTED) {
-			throw new IllegalStateException("only SUBMITTED orders can be filled");
+
+		BigDecimal deltaQuantity = order.applyCumulativeFillDelta(command.cumulativeFilledQuantity());
+		if (deltaQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+			return Optional.empty();
 		}
 
-		BigDecimal executedAmount = amount(command.executedQuantity(), command.executedPrice());
+		BigDecimal executedAmount = amount(deltaQuantity, command.executedPrice());
 		TradeHistory trade = tradeHistoryRepository.saveAndFlush(new TradeHistory(
 				order,
 				order.getTicker(),
 				order.getSide(),
 				order.getOrderReason(),
-				command.executedQuantity(),
+				deltaQuantity,
 				command.executedPrice(),
 				executedAmount,
 				command.executedAt()
 		));
 
 		if (order.getSide() == OrderSide.BUY) {
-			applyBuy(order, command.executedQuantity(), executedAmount);
+			applyBuy(order, deltaQuantity, executedAmount);
 		}
 		else {
-			applySell(order, command.executedQuantity());
+			applySell(order, deltaQuantity);
 		}
 
-		order.markFilled();
 		orderHistoryRepository.saveAndFlush(order);
-		return trade;
+		return Optional.of(trade);
 	}
 
 	private void applyBuy(OrderHistory order, BigDecimal executedQuantity, BigDecimal executedAmount) {
