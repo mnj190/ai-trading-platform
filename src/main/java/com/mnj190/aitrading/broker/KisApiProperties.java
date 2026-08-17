@@ -6,7 +6,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record KisApiProperties(
 		String baseUrl,
 		String appKey,
-		String appSecret
+		String appSecret,
+		String accountNumber,
+		String accountProductCode,
+		boolean paperTrading
 ) {
 
 	public KisApiProperties {
@@ -21,6 +24,15 @@ public record KisApiProperties(
 		}
 		if (appSecret == null || appSecret.isBlank()) {
 			throw new IllegalStateException("kis.api.app-secret must not be blank");
+		}
+	}
+
+	public void validateAccount() {
+		if (accountNumber == null || accountNumber.isBlank()) {
+			throw new IllegalStateException("kis.api.account-number must not be blank");
+		}
+		if (accountProductCode == null || accountProductCode.isBlank()) {
+			throw new IllegalStateException("kis.api.account-product-code must not be blank");
 		}
 	}
 }

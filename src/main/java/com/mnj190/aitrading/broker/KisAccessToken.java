@@ -15,4 +15,11 @@ public record KisAccessToken(
 		}
 		Objects.requireNonNull(tokenType, "tokenType must not be null");
 	}
+
+	public String authorizationHeaderValue() {
+		if (tokenType.isBlank()) {
+			return accessToken;
+		}
+		return tokenType + " " + accessToken;
+	}
 }

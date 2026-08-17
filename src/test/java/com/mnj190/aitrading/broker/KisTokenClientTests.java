@@ -20,7 +20,14 @@ class KisTokenClientTests {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisTokenClient client = new KisTokenClient(
-				new KisApiProperties("https://openapivts.koreainvestment.com:29443", "test-key", "test-secret"),
+				new KisApiProperties(
+						"https://openapivts.koreainvestment.com:29443",
+						"test-key",
+						"test-secret",
+						"12345678",
+						"01",
+						true
+				),
 				builder
 		);
 

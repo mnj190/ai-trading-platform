@@ -21,3 +21,6 @@ kis:
     base-url: ${KIS_API_BASE_URL:https://openapivts.koreainvestment.com:29443}
     app-key: ${KIS_APP_KEY:}
     app-secret: ${KIS_APP_SECRET:}
+    account-number: ${KIS_ACCOUNT_NUMBER:}
+    account-product-code: ${KIS_ACCOUNT_PRODUCT_CODE:01}
+    paper-trading: ${KIS_PAPER_TRADING:true}
