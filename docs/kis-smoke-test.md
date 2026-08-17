@@ -38,6 +38,14 @@ kis:
 ./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-present-balance-smoke --spring.main.web-application-type=none'
 ```
 
+모의투자용 주문 요청/체결 조회 smoke:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-paper-order-smoke --spring.main.web-application-type=none --kis.smoke.order.symbol=AAPL --kis.smoke.order.quantity=1 --kis.smoke.order.max-notional-amount=500'
+```
+
+이 runner는 `kis.api.paper-trading=true`일 때만 실행된다. 기본 주문은 AAPL 1주 지정가 매수이며, 현재가에서 1% buffer를 더한 가격을 limit price로 사용한다. `kis.smoke.order.limit-price`를 지정하면 해당 가격을 사용한다.
+
 ## 방법 2: 환경변수
 
 터미널 세션에서만 값을 넣고 싶으면 환경변수를 사용한다.
@@ -96,6 +104,16 @@ KIS balance smoke test finished
 - 한 번 발급받은 token은 `expires_in` 기준 유효기간 동안 재사용한다.
 - 만료 5분 전부터는 새 token을 발급받는다.
 - KIS token 발급은 1분당 1회 제한이 있으므로, runner나 service는 `KisTokenClient`를 직접 호출하지 않고 provider를 사용한다.
+- token cache는 기본적으로 `tmp/kis-access-token-cache.properties`에 저장된다.
+- cache key에는 app key 원문을 저장하지 않고, base url/app key/account/paper 여부를 묶은 SHA-256 hash만 저장한다.
+- `tmp/`는 `.gitignore` 대상이므로 token cache 파일은 GitHub에 올라가지 않는다.
+
+## 모의투자 주문 Smoke 결과 기록 원칙
+
+- 공개 repo 문서에는 계좌별 주문가능금액, 수량, 잔고 같은 응답 수치를 기록하지 않는다.
+- 실행 결과는 성공/실패 여부와 KIS error code 정도만 남긴다.
+- 상세 수치는 개인 Obsidian vault에만 기록한다.
+- 2026-08-17 기준 현재가/매수가능금액/체결조회 API는 호출 가능했고, 주문 요청 POST는 KIS gateway routing error `EGW00202`로 실패했다.
 
 ## 1000원 주문 테스트 주의
 

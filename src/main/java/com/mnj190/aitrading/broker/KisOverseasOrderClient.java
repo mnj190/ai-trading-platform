@@ -50,7 +50,11 @@ public class KisOverseasOrderClient {
 		}
 
 		Map<String, String> body = request.toBody(properties);
+		body.put("CTAC_TLNO", "");
+		body.put("MGCO_APTM_ODNO", "");
+		body.put("SLL_TYPE", side == OrderSide.SELL ? "00" : "");
 		String hashKey = hashKeyClient.issueHashKey(body);
+		pauseBetweenKisRequests();
 
 		KisOverseasOrderResponse response = restClient.post()
 				.uri(PATH)
@@ -83,5 +87,15 @@ public class KisOverseasOrderClient {
 			return REAL_US_BUY_TR_ID;
 		}
 		return REAL_US_SELL_TR_ID;
+	}
+
+	private void pauseBetweenKisRequests() {
+		try {
+			Thread.sleep(1_200);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("interrupted while waiting for KIS request throttle", ex);
+		}
 	}
 }

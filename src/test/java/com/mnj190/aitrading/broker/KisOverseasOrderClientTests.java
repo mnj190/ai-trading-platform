@@ -37,7 +37,10 @@ class KisOverseasOrderClientTests {
 				  "ORD_DVSN": "00",
 				  "ORD_QTY": "1",
 				  "OVRS_ORD_UNPR": "180.12",
-				  "ORD_SVR_DVSN_CD": "0"
+				  "ORD_SVR_DVSN_CD": "0",
+				  "CTAC_TLNO": "",
+				  "MGCO_APTM_ODNO": "",
+				  "SLL_TYPE": ""
 				}
 				""";
 
