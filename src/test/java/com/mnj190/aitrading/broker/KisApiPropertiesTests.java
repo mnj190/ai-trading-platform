@@ -1,0 +1,28 @@
+package com.mnj190.aitrading.broker;
+
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class KisApiPropertiesTests {
+
+	@Test
+	void rejectsBlankBaseUrl() {
+		assertThatThrownBy(() -> new KisApiProperties("", "app-key", "app-secret"))
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("base-url");
+	}
+
+	@Test
+	void rejectsBlankCredentialsWhenValidatingCredentials() {
+		KisApiProperties properties = new KisApiProperties(
+				"https://openapivts.koreainvestment.com:29443",
+				"",
+				""
+		);
+
+		assertThatThrownBy(properties::validateCredentials)
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessageContaining("app-key");
+	}
+}

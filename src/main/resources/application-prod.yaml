@@ -15,3 +15,9 @@ spring:
     properties:
       hibernate:
         default_schema: trading
+
+kis:
+  api:
+    base-url: ${KIS_API_BASE_URL:https://openapi.koreainvestment.com:9443}
+    app-key: ${KIS_APP_KEY}
+    app-secret: ${KIS_APP_SECRET}
