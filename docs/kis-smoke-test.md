@@ -8,7 +8,31 @@
 - local profile은 기본적으로 KIS 모의투자 도메인을 사용한다.
 - `kis-smoke` profile은 계좌 조회 확인용 runner만 실행하기 위한 profile이다.
 
-## 환경변수
+## 방법 1: 로컬 secret YAML
+
+프로젝트 루트의 `config/application-secret.yaml`에 값을 넣는다.
+
+```yaml
+kis:
+  api:
+    app-key: "발급받은_app_key"
+    app-secret: "발급받은_app_secret"
+    account-number: "계좌번호_앞8자리"
+    account-product-code: "01"
+    paper-trading: true
+```
+
+`config/application-secret.yaml`은 `.gitignore`에 포함되어 GitHub에 올라가지 않는다.
+
+실행:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,secret,kis-smoke --spring.main.web-application-type=none'
+```
+
+## 방법 2: 환경변수
+
+터미널 세션에서만 값을 넣고 싶으면 환경변수를 사용한다.
 
 ```bash
 export KIS_APP_KEY="발급받은_app_key"
@@ -18,18 +42,26 @@ export KIS_ACCOUNT_PRODUCT_CODE="01"
 export KIS_PAPER_TRADING="true"
 ```
 
-실전투자를 테스트할 때만 아래처럼 바꾼다.
-
-```bash
-export KIS_API_BASE_URL="https://openapi.koreainvestment.com:9443"
-export KIS_PAPER_TRADING="false"
-```
-
-## 계좌 조회 실행
+실행:
 
 ```bash
 ./gradlew bootRun --args='--spring.profiles.active=local,kis-smoke --spring.main.web-application-type=none'
 ```
+
+## 실전투자 도메인
+
+실전투자를 테스트할 때만 아래 값을 사용한다.
+
+```yaml
+kis:
+  api:
+    base-url: "https://openapi.koreainvestment.com:9443"
+    paper-trading: false
+```
+
+초기에는 반드시 `paper-trading: true`로 계좌 조회부터 확인한다.
+
+## 계좌 조회 결과
 
 성공하면 로그에 다음 순서가 보인다.
 
