@@ -1,4 +1,5 @@
 package com.mnj190.aitrading.broker;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -14,21 +15,21 @@ class KisBalanceSmokeRunner implements ApplicationRunner {
 
 	private static final Logger log = LoggerFactory.getLogger(KisBalanceSmokeRunner.class);
 
-	private final KisTokenClient tokenClient;
+	private final KisAccessTokenProvider tokenProvider;
 	private final KisOverseasBalanceClient balanceClient;
 
 	KisBalanceSmokeRunner(
-			KisTokenClient tokenClient,
+			KisAccessTokenProvider tokenProvider,
 			KisOverseasBalanceClient balanceClient
 	) {
-		this.tokenClient = Objects.requireNonNull(tokenClient);
+		this.tokenProvider = Objects.requireNonNull(tokenProvider);
 		this.balanceClient = Objects.requireNonNull(balanceClient);
 	}
 
 	@Override
 	public void run(ApplicationArguments args) {
 		log.info("Starting KIS balance smoke test");
-		KisAccessToken accessToken = tokenClient.issueAccessToken();
+		KisAccessToken accessToken = tokenProvider.getAccessToken();
 		KisOverseasBalanceResponse response = balanceClient.inquireNasdaqUsdBalance(accessToken);
 
 		log.info(

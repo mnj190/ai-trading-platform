@@ -26,6 +26,10 @@ application-secret.yaml
 application-secret.yml
 config/application-secret.yaml
 config/application-secret.yml
+config/application-*-secret.yaml
+config/application-*-secret.yml
+config/application-secret copy.yaml
+config/application-secret copy.yml
 application-*.secret.yaml
 application-*.secret.yml
 application-private.yaml

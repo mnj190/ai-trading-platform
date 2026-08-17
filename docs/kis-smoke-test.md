@@ -24,10 +24,18 @@ kis:
 
 `config/application-secret.yaml`은 `.gitignore`에 포함되어 GitHub에 올라가지 않는다.
 
+모의투자용 key는 프로젝트 루트의 `config/application-paper-secret.yaml`에 따로 넣는다. 이 파일도 `.gitignore`에 포함되어 GitHub에 올라가지 않는다.
+
 실행:
 
 ```bash
 ./gradlew bootRun --args='--spring.profiles.active=local,secret,kis-smoke --spring.main.web-application-type=none'
+```
+
+모의투자용 현재잔고 조회:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-present-balance-smoke --spring.main.web-application-type=none'
 ```
 
 ## 방법 2: 환경변수
@@ -81,6 +89,13 @@ KIS balance smoke test finished
 - `output2` 계좌 요약 구조
 
 이 응답 구조를 확인한 뒤 실제 체결 조회 응답을 `trade_history`에 매핑한다.
+
+## Token Cache
+
+- KIS access token은 `KisAccessTokenProvider`가 관리한다.
+- 한 번 발급받은 token은 `expires_in` 기준 유효기간 동안 재사용한다.
+- 만료 5분 전부터는 새 token을 발급받는다.
+- KIS token 발급은 1분당 1회 제한이 있으므로, runner나 service는 `KisTokenClient`를 직접 호출하지 않고 provider를 사용한다.
 
 ## 1000원 주문 테스트 주의
 
