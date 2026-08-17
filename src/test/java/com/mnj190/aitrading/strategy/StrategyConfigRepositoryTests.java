@@ -24,11 +24,10 @@ class StrategyConfigRepositoryTests {
 				.findByStrategyVersionAndEnabledTrue("PE_MEAN_REVERSION_V1")
 				.orElseThrow();
 
-		assertThat(config.getBuy1Threshold()).isEqualByComparingTo("-0.1500");
-		assertThat(config.getBuy2Threshold()).isEqualByComparingTo("-0.2000");
-		assertThat(config.getBuy3Threshold()).isEqualByComparingTo("-0.2500");
-		assertThat(config.getBuyUnitRatio()).isEqualByComparingTo("0.1000");
-		assertThat(config.getSellThreshold()).isEqualByComparingTo("0.0000");
+		assertThat(config.getEntryThreshold()).isEqualByComparingTo("-0.1500");
+		assertThat(config.getSwitchThreshold()).isEqualByComparingTo("0.0500");
+		assertThat(config.getExitThreshold()).isEqualByComparingTo("0.0000");
+		assertThat(config.getMaxPositions()).isEqualTo(1);
 	}
 
 	@Test
@@ -36,10 +35,9 @@ class StrategyConfigRepositoryTests {
 		StrategyConfig config = new StrategyConfig(
 				"TEST_STRATEGY",
 				new BigDecimal("-0.1000"),
-				new BigDecimal("-0.2000"),
-				new BigDecimal("-0.3000"),
-				new BigDecimal("0.1000"),
+				new BigDecimal("0.0500"),
 				new BigDecimal("0.0000"),
+				1,
 				true
 		);
 
@@ -59,4 +57,3 @@ class StrategyConfigRepositoryTests {
 		assertThat(repository.existsById(saved.getId())).isFalse();
 	}
 }
-

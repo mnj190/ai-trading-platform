@@ -7,12 +7,12 @@ public class PeerDiscountCalculator {
 
 	private static final int RESULT_SCALE = 4;
 
-	public BigDecimal calculate(BigDecimal currentPer, BigDecimal peerAveragePer) {
-		validatePositive(currentPer, "currentPer");
-		validatePositive(peerAveragePer, "peerAveragePer");
+	public BigDecimal calculate(BigDecimal normalizedPer, BigDecimal peerAverageNormalizedPer) {
+		validatePositive(normalizedPer, "normalizedPer");
+		validatePositive(peerAverageNormalizedPer, "peerAverageNormalizedPer");
 
-		return currentPer
-				.divide(peerAveragePer, RESULT_SCALE + 4, RoundingMode.HALF_UP)
+		return normalizedPer
+				.divide(peerAverageNormalizedPer, RESULT_SCALE + 4, RoundingMode.HALF_UP)
 				.subtract(BigDecimal.ONE)
 				.setScale(RESULT_SCALE, RoundingMode.HALF_UP);
 	}
@@ -23,4 +23,3 @@ public class PeerDiscountCalculator {
 		}
 	}
 }
-

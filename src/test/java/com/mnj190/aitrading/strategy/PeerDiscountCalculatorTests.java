@@ -33,17 +33,16 @@ class PeerDiscountCalculatorTests {
 	}
 
 	@Test
-	void rejectsNonPositiveCurrentPer() {
+	void rejectsNonPositiveNormalizedPer() {
 		assertThatThrownBy(() -> calculator.calculate(BigDecimal.ZERO, new BigDecimal("50.0000")))
 				.isInstanceOf(IllegalArgumentException.class)
-				.hasMessageContaining("currentPer");
+				.hasMessageContaining("normalizedPer");
 	}
 
 	@Test
-	void rejectsNonPositivePeerAveragePer() {
+	void rejectsNonPositivePeerAverageNormalizedPer() {
 		assertThatThrownBy(() -> calculator.calculate(new BigDecimal("50.0000"), BigDecimal.ZERO))
 				.isInstanceOf(IllegalArgumentException.class)
-				.hasMessageContaining("peerAveragePer");
+				.hasMessageContaining("peerAverageNormalizedPer");
 	}
 }
-

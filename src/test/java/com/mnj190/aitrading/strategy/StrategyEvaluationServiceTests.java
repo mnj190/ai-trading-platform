@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,56 +14,45 @@ class StrategyEvaluationServiceTests {
 	private final StrategyRuleConfig config = StrategyRuleConfig.peMeanReversionV1();
 
 	@Test
-	void evaluatesPeerAverageDiscountAndDecisionForUniverse() {
-		List<StrategyEvaluationResult> results = service.evaluate(
+	void evaluatesNormalizedPerDiscountAndEntryDecisionForUniverse() {
+		StrategyEvaluation evaluation = service.evaluate(
 				List.of(
-						per("NVDA", "30.0000"),
-						per("GOOGL", "50.0000"),
-						per("AAPL", "40.0000"),
-						per("AMZN", "45.0000"),
-						per("MSFT", "35.0000")
+						input("NVDA", "30.0000", "37.5000"),
+						input("GOOGL", "50.0000", "50.0000"),
+						input("AAPL", "55.0000", "50.0000"),
+						input("AMZN", "45.0000", "50.0000"),
+						input("MSFT", "60.0000", "50.0000")
 				),
-				Map.of(
-						"NVDA", StrategyStage.NONE,
-						"GOOGL", StrategyStage.BUY1
-				),
+				Optional.empty(),
 				config
 		);
 
-		StrategyEvaluationResult nvda = findByTicker(results, "NVDA");
-		assertThat(nvda.peerAveragePer()).isEqualByComparingTo("40.0000");
-		assertThat(nvda.peerDiscount()).isEqualByComparingTo("-0.2500");
-		assertThat(nvda.currentStage()).isEqualTo(StrategyStage.NONE);
-		assertThat(nvda.decision().signal()).isEqualTo(StrategySignal.BUY);
-		assertThat(nvda.decision().nextStage()).isEqualTo(StrategyStage.BUY1);
+		StrategyEvaluationResult nvda = findByTicker(evaluation.results(), "NVDA");
+		assertThat(nvda.normalizedPer()).isEqualByComparingTo("0.8000");
+		assertThat(nvda.peerAverageNormalizedPer()).isEqualByComparingTo("1.0000");
+		assertThat(nvda.peerDiscount()).isEqualByComparingTo("-0.2000");
 
-		StrategyEvaluationResult googl = findByTicker(results, "GOOGL");
-		assertThat(googl.peerDiscount()).isEqualByComparingTo("0.2500");
-		assertThat(googl.currentStage()).isEqualTo(StrategyStage.BUY1);
-		assertThat(googl.decision().signal()).isEqualTo(StrategySignal.SELL);
-		assertThat(googl.decision().nextStage()).isEqualTo(StrategyStage.NONE);
+		assertThat(evaluation.decision().signal()).isEqualTo(StrategySignal.ENTRY);
+		assertThat(evaluation.decision().buyTicker()).isEqualTo("NVDA");
 	}
 
 	@Test
-	void defaultsMissingCurrentStageToNone() {
-		List<StrategyEvaluationResult> results = service.evaluate(
+	void evaluatesSwitchDecisionForCurrentHolding() {
+		StrategyEvaluation evaluation = service.evaluate(
 				List.of(
-						per("NVDA", "40.0000"),
-						per("GOOGL", "40.0000"),
-						per("AAPL", "40.0000"),
-						per("AMZN", "40.0000"),
-						per("MSFT", "40.0000")
+						input("NVDA", "43.0000", "50.0000"),
+						input("GOOGL", "50.0000", "50.0000"),
+						input("AAPL", "55.0000", "50.0000"),
+						input("AMZN", "36.0000", "50.0000"),
+						input("MSFT", "60.0000", "50.0000")
 				),
-				Map.of(),
+				Optional.of("NVDA"),
 				config
 		);
 
-		assertThat(results)
-				.extracting(StrategyEvaluationResult::currentStage)
-				.containsOnly(StrategyStage.NONE);
-		assertThat(results)
-				.extracting(result -> result.decision().signal())
-				.containsOnly(StrategySignal.HOLD);
+		assertThat(evaluation.decision().signal()).isEqualTo(StrategySignal.SWITCH);
+		assertThat(evaluation.decision().sellTicker()).isEqualTo("NVDA");
+		assertThat(evaluation.decision().buyTicker()).isEqualTo("AMZN");
 	}
 
 	private StrategyEvaluationResult findByTicker(List<StrategyEvaluationResult> results, String ticker) {
@@ -73,8 +62,14 @@ class StrategyEvaluationServiceTests {
 				.orElseThrow();
 	}
 
-	private PeerPerInput per(String ticker, String currentPer) {
-		return new PeerPerInput(ticker, new BigDecimal(currentPer));
+	private StrategyValuationInput input(String ticker, String currentPer, String fiveYearAveragePer) {
+		return new StrategyValuationInput(
+				ticker,
+				new BigDecimal("100.0000"),
+				new BigDecimal("5.0000"),
+				new BigDecimal(currentPer),
+				new BigDecimal(fiveYearAveragePer)
+		);
 	}
 }
 

@@ -3,35 +3,34 @@ package com.mnj190.aitrading.strategy;
 import java.math.BigDecimal;
 
 public record StrategyRuleConfig(
-		BigDecimal buy1Threshold,
-		BigDecimal buy2Threshold,
-		BigDecimal buy3Threshold,
-		BigDecimal buyUnitRatio,
-		BigDecimal sellThreshold
+		BigDecimal entryThreshold,
+		BigDecimal switchThreshold,
+		BigDecimal exitThreshold,
+		int maxPositions
 ) {
 
 	public static StrategyRuleConfig peMeanReversionV1() {
 		return new StrategyRuleConfig(
 				new BigDecimal("-0.1500"),
-				new BigDecimal("-0.2000"),
-				new BigDecimal("-0.2500"),
-				new BigDecimal("0.1000"),
-				new BigDecimal("0.0000")
+				new BigDecimal("0.0500"),
+				new BigDecimal("0.0000"),
+				1
 		);
 	}
 
 	public StrategyRuleConfig {
-		validateNotNull(buy1Threshold, "buy1Threshold");
-		validateNotNull(buy2Threshold, "buy2Threshold");
-		validateNotNull(buy3Threshold, "buy3Threshold");
-		validateNotNull(buyUnitRatio, "buyUnitRatio");
-		validateNotNull(sellThreshold, "sellThreshold");
+		validateNotNull(entryThreshold, "entryThreshold");
+		validateNotNull(switchThreshold, "switchThreshold");
+		validateNotNull(exitThreshold, "exitThreshold");
 
-		if (buy3Threshold.compareTo(buy2Threshold) > 0 || buy2Threshold.compareTo(buy1Threshold) > 0) {
-			throw new IllegalArgumentException("buy thresholds must satisfy BUY3 <= BUY2 <= BUY1");
+		if (entryThreshold.compareTo(exitThreshold) >= 0) {
+			throw new IllegalArgumentException("entryThreshold must be less than exitThreshold");
 		}
-		if (buyUnitRatio.compareTo(BigDecimal.ZERO) <= 0 || buyUnitRatio.compareTo(BigDecimal.ONE) > 0) {
-			throw new IllegalArgumentException("buyUnitRatio must be greater than zero and less than or equal to one");
+		if (switchThreshold.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new IllegalArgumentException("switchThreshold must be greater than zero");
+		}
+		if (maxPositions != 1) {
+			throw new IllegalArgumentException("PE_MEAN_REVERSION_V1 supports exactly one position");
 		}
 	}
 

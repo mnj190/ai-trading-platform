@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -40,7 +40,7 @@ class StrategyEvaluationRecorderTests {
 						input("AMZN", "180.0000", "4.0000", "45.0000"),
 						input("MSFT", "140.0000", "4.0000", "35.0000")
 				),
-				Map.of("NVDA", StrategyStage.NONE),
+				Optional.empty(),
 				StrategyRuleConfig.peMeanReversionV1(),
 				STRATEGY_VERSION
 		);
@@ -59,7 +59,9 @@ class StrategyEvaluationRecorderTests {
 				.findByTradingDateAndTickerAndStrategyVersion(TRADING_DATE, "NVDA", STRATEGY_VERSION)
 				.orElseThrow();
 
-		assertThat(nvda.getPeerAveragePer()).isEqualByComparingTo("40.0000");
+		assertThat(nvda.getFiveYearAveragePer()).isEqualByComparingTo("37.5000");
+		assertThat(nvda.getNormalizedPer()).isEqualByComparingTo("0.8000");
+		assertThat(nvda.getPeerAverageNormalizedPer()).isEqualByComparingTo("1.0667");
 		assertThat(nvda.getPeerDiscount()).isEqualByComparingTo("-0.2500");
 	}
 
@@ -74,7 +76,7 @@ class StrategyEvaluationRecorderTests {
 						input("AMZN", "180.0000", "4.0000", "45.0000"),
 						input("MSFT", "140.0000", "4.0000", "35.0000")
 				),
-				Map.of(),
+				Optional.empty(),
 				StrategyRuleConfig.peMeanReversionV1(),
 				STRATEGY_VERSION
 		);
@@ -88,7 +90,7 @@ class StrategyEvaluationRecorderTests {
 						input("AMZN", "180.0000", "4.0000", "45.0000"),
 						input("MSFT", "140.0000", "4.0000", "35.0000")
 				),
-				Map.of(),
+				Optional.empty(),
 				StrategyRuleConfig.peMeanReversionV1(),
 				STRATEGY_VERSION
 		);
@@ -108,8 +110,8 @@ class StrategyEvaluationRecorderTests {
 				ticker,
 				new BigDecimal(closePrice),
 				new BigDecimal(ttmEps),
-				new BigDecimal(currentPer)
+				new BigDecimal(currentPer),
+				new BigDecimal("37.5000")
 		);
 	}
 }
-

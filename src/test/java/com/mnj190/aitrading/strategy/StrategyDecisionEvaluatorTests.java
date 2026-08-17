@@ -3,6 +3,8 @@ package com.mnj190.aitrading.strategy;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,78 +15,112 @@ class StrategyDecisionEvaluatorTests {
 	private final StrategyRuleConfig config = StrategyRuleConfig.peMeanReversionV1();
 
 	@Test
-	void buysBuy1FromNoneWhenDiscountReachesBuy1Threshold() {
-		StrategyDecision decision = evaluate(StrategyStage.NONE, "-0.1500");
+	void entersBestCandidateWhenCashAndDiscountReachesEntryThreshold() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(
+						result("NVDA", "-0.1000"),
+						result("AMZN", "-0.1500"),
+						result("AAPL", "0.0000")
+				),
+				Optional.empty(),
+				config
+		);
 
-		assertThat(decision.signal()).isEqualTo(StrategySignal.BUY);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.BUY1);
+		assertThat(decision.signal()).isEqualTo(StrategySignal.ENTRY);
+		assertThat(decision.buyTicker()).isEqualTo("AMZN");
 	}
 
 	@Test
-	void holdsNoneWhenDiscountDoesNotReachBuy1Threshold() {
-		StrategyDecision decision = evaluate(StrategyStage.NONE, "-0.1499");
+	void holdsCashWhenBestCandidateDoesNotReachEntryThreshold() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(result("NVDA", "-0.1499")),
+				Optional.empty(),
+				config
+		);
 
 		assertThat(decision.signal()).isEqualTo(StrategySignal.HOLD);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.NONE);
 	}
 
 	@Test
-	void doesNotRepeatBuy1Stage() {
-		StrategyDecision decision = evaluate(StrategyStage.BUY1, "-0.1900");
+	void switchesWhenAnotherTickerIsAtLeastFivePercentagePointsCheaper() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(
+						result("NVDA", "-0.1400"),
+						result("AMZN", "-0.2100")
+				),
+				Optional.of("NVDA"),
+				config
+		);
+
+		assertThat(decision.signal()).isEqualTo(StrategySignal.SWITCH);
+		assertThat(decision.sellTicker()).isEqualTo("NVDA");
+		assertThat(decision.buyTicker()).isEqualTo("AMZN");
+	}
+
+	@Test
+	void holdsCurrentPositionWhenSwitchGapIsTooSmall() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(
+						result("NVDA", "-0.1400"),
+						result("AMZN", "-0.1700")
+				),
+				Optional.of("NVDA"),
+				config
+		);
 
 		assertThat(decision.signal()).isEqualTo(StrategySignal.HOLD);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.BUY1);
 	}
 
 	@Test
-	void buysBuy2FromBuy1WhenDiscountReachesBuy2Threshold() {
-		StrategyDecision decision = evaluate(StrategyStage.BUY1, "-0.2000");
+	void exitsWhenCurrentHoldingDiscountIsResolved() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(
+						result("NVDA", "0.0000"),
+						result("AMZN", "-0.1000")
+				),
+				Optional.of("NVDA"),
+				config
+		);
 
-		assertThat(decision.signal()).isEqualTo(StrategySignal.BUY);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.BUY2);
+		assertThat(decision.signal()).isEqualTo(StrategySignal.EXIT);
+		assertThat(decision.sellTicker()).isEqualTo("NVDA");
 	}
 
 	@Test
-	void buysBuy3FromBuy2WhenDiscountReachesBuy3Threshold() {
-		StrategyDecision decision = evaluate(StrategyStage.BUY2, "-0.2500");
+	void switchHasPriorityOverExitWhenBetterCandidateMeetsSwitchRule() {
+		StrategyDecision decision = evaluator.evaluate(
+				List.of(
+						result("NVDA", "0.0100"),
+						result("AMZN", "-0.2000")
+				),
+				Optional.of("NVDA"),
+				config
+		);
 
-		assertThat(decision.signal()).isEqualTo(StrategySignal.BUY);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.BUY3);
+		assertThat(decision.signal()).isEqualTo(StrategySignal.SWITCH);
+		assertThat(decision.sellTicker()).isEqualTo("NVDA");
+		assertThat(decision.buyTicker()).isEqualTo("AMZN");
 	}
 
 	@Test
-	void holdsBuy3WhenDiscountFallsFurther() {
-		StrategyDecision decision = evaluate(StrategyStage.BUY3, "-0.3000");
-
-		assertThat(decision.signal()).isEqualTo(StrategySignal.HOLD);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.BUY3);
+	void rejectsHoldingTickerMissingFromResults() {
+		assertThatThrownBy(() -> evaluator.evaluate(
+				List.of(result("NVDA", "-0.1000")),
+				Optional.of("AMZN"),
+				config
+		)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("current holding ticker");
 	}
 
-	@Test
-	void sellsHeldPositionWhenDiscountReturnsToPeerAverage() {
-		StrategyDecision decision = evaluate(StrategyStage.BUY2, "0.0000");
-
-		assertThat(decision.signal()).isEqualTo(StrategySignal.SELL);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.NONE);
-	}
-
-	@Test
-	void holdsNoneWhenNoPositionMeetsSellCondition() {
-		StrategyDecision decision = evaluate(StrategyStage.NONE, "0.0000");
-
-		assertThat(decision.signal()).isEqualTo(StrategySignal.HOLD);
-		assertThat(decision.nextStage()).isEqualTo(StrategyStage.NONE);
-	}
-
-	@Test
-	void rejectsNullPeerDiscount() {
-		assertThatThrownBy(() -> evaluator.evaluate(StrategyStage.NONE, null, config))
-				.isInstanceOf(IllegalArgumentException.class)
-				.hasMessageContaining("peerDiscount");
-	}
-
-	private StrategyDecision evaluate(StrategyStage currentStage, String peerDiscount) {
-		return evaluator.evaluate(currentStage, new BigDecimal(peerDiscount), config);
+	private StrategyEvaluationResult result(String ticker, String peerDiscount) {
+		return new StrategyEvaluationResult(
+				ticker,
+				new BigDecimal("40.0000"),
+				new BigDecimal("50.0000"),
+				new BigDecimal("0.8000"),
+				new BigDecimal("1.0000"),
+				new BigDecimal(peerDiscount)
+		);
 	}
 }
 

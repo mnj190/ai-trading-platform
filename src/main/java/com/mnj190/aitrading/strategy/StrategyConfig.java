@@ -6,7 +6,6 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
@@ -23,20 +22,17 @@ public class StrategyConfig {
 	@Column(name = "strategy_version", nullable = false, unique = true, length = 64)
 	private String strategyVersion;
 
-	@Column(name = "buy1_threshold", nullable = false, precision = 8, scale = 4)
-	private BigDecimal buy1Threshold;
+	@Column(name = "entry_threshold", nullable = false, precision = 8, scale = 4)
+	private BigDecimal entryThreshold;
 
-	@Column(name = "buy2_threshold", nullable = false, precision = 8, scale = 4)
-	private BigDecimal buy2Threshold;
+	@Column(name = "switch_threshold", nullable = false, precision = 8, scale = 4)
+	private BigDecimal switchThreshold;
 
-	@Column(name = "buy3_threshold", nullable = false, precision = 8, scale = 4)
-	private BigDecimal buy3Threshold;
+	@Column(name = "exit_threshold", nullable = false, precision = 8, scale = 4)
+	private BigDecimal exitThreshold;
 
-	@Column(name = "buy_unit_ratio", nullable = false, precision = 8, scale = 4)
-	private BigDecimal buyUnitRatio;
-
-	@Column(name = "sell_threshold", nullable = false, precision = 8, scale = 4)
-	private BigDecimal sellThreshold;
+	@Column(name = "max_positions", nullable = false)
+	private int maxPositions;
 
 	@Column(nullable = false)
 	private boolean enabled;
@@ -44,40 +40,28 @@ public class StrategyConfig {
 	@Column(name = "created_at", nullable = false)
 	private OffsetDateTime createdAt;
 
-	@Column(name = "updated_at", nullable = false)
-	private OffsetDateTime updatedAt;
-
 	protected StrategyConfig() {
 	}
 
 	public StrategyConfig(
 			String strategyVersion,
-			BigDecimal buy1Threshold,
-			BigDecimal buy2Threshold,
-			BigDecimal buy3Threshold,
-			BigDecimal buyUnitRatio,
-			BigDecimal sellThreshold,
+			BigDecimal entryThreshold,
+			BigDecimal switchThreshold,
+			BigDecimal exitThreshold,
+			int maxPositions,
 			boolean enabled
 	) {
 		this.strategyVersion = strategyVersion;
-		this.buy1Threshold = buy1Threshold;
-		this.buy2Threshold = buy2Threshold;
-		this.buy3Threshold = buy3Threshold;
-		this.buyUnitRatio = buyUnitRatio;
-		this.sellThreshold = sellThreshold;
+		this.entryThreshold = entryThreshold;
+		this.switchThreshold = switchThreshold;
+		this.exitThreshold = exitThreshold;
+		this.maxPositions = maxPositions;
 		this.enabled = enabled;
 	}
 
 	@PrePersist
 	void prePersist() {
-		OffsetDateTime now = OffsetDateTime.now();
-		this.createdAt = now;
-		this.updatedAt = now;
-	}
-
-	@PreUpdate
-	void preUpdate() {
-		this.updatedAt = OffsetDateTime.now();
+		this.createdAt = OffsetDateTime.now();
 	}
 
 	public Long getId() {
@@ -88,24 +72,20 @@ public class StrategyConfig {
 		return strategyVersion;
 	}
 
-	public BigDecimal getBuy1Threshold() {
-		return buy1Threshold;
+	public BigDecimal getEntryThreshold() {
+		return entryThreshold;
 	}
 
-	public BigDecimal getBuy2Threshold() {
-		return buy2Threshold;
+	public BigDecimal getSwitchThreshold() {
+		return switchThreshold;
 	}
 
-	public BigDecimal getBuy3Threshold() {
-		return buy3Threshold;
+	public BigDecimal getExitThreshold() {
+		return exitThreshold;
 	}
 
-	public BigDecimal getBuyUnitRatio() {
-		return buyUnitRatio;
-	}
-
-	public BigDecimal getSellThreshold() {
-		return sellThreshold;
+	public int getMaxPositions() {
+		return maxPositions;
 	}
 
 	public boolean isEnabled() {
@@ -114,10 +94,6 @@ public class StrategyConfig {
 
 	public OffsetDateTime getCreatedAt() {
 		return createdAt;
-	}
-
-	public OffsetDateTime getUpdatedAt() {
-		return updatedAt;
 	}
 
 	public void disable() {

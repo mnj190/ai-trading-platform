@@ -2,67 +2,69 @@ package com.mnj190.aitrading.strategy;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 public class StrategyEvaluationService {
 
-	private final PeerAveragePerCalculator peerAveragePerCalculator;
+	private final PeerAverageNormalizedPerCalculator peerAverageNormalizedPerCalculator;
 	private final PeerDiscountCalculator peerDiscountCalculator;
 	private final StrategyDecisionEvaluator strategyDecisionEvaluator;
 
 	public StrategyEvaluationService() {
 		this(
-				new PeerAveragePerCalculator(),
+				new PeerAverageNormalizedPerCalculator(),
 				new PeerDiscountCalculator(),
 				new StrategyDecisionEvaluator()
 		);
 	}
 
 	StrategyEvaluationService(
-			PeerAveragePerCalculator peerAveragePerCalculator,
+			PeerAverageNormalizedPerCalculator peerAverageNormalizedPerCalculator,
 			PeerDiscountCalculator peerDiscountCalculator,
 			StrategyDecisionEvaluator strategyDecisionEvaluator
 	) {
-		this.peerAveragePerCalculator = Objects.requireNonNull(peerAveragePerCalculator);
+		this.peerAverageNormalizedPerCalculator = Objects.requireNonNull(peerAverageNormalizedPerCalculator);
 		this.peerDiscountCalculator = Objects.requireNonNull(peerDiscountCalculator);
 		this.strategyDecisionEvaluator = Objects.requireNonNull(strategyDecisionEvaluator);
 	}
 
-	public List<StrategyEvaluationResult> evaluate(
-			List<PeerPerInput> peerInputs,
-			Map<String, StrategyStage> currentStages,
+	public StrategyEvaluation evaluate(
+			List<StrategyValuationInput> valuationInputs,
+			Optional<String> currentHoldingTicker,
 			StrategyRuleConfig config
 	) {
-		Objects.requireNonNull(peerInputs, "peerInputs must not be null");
-		Objects.requireNonNull(currentStages, "currentStages must not be null");
+		Objects.requireNonNull(valuationInputs, "valuationInputs must not be null");
+		Objects.requireNonNull(currentHoldingTicker, "currentHoldingTicker must not be null");
 		Objects.requireNonNull(config, "config must not be null");
 
-		BigDecimal peerAveragePer = peerAveragePerCalculator.calculate(peerInputs);
+		BigDecimal peerAverageNormalizedPer = peerAverageNormalizedPerCalculator.calculate(valuationInputs.stream()
+				.map(StrategyValuationInput::toNormalizedPerInput)
+				.toList());
 
-		return peerInputs.stream()
-				.map(input -> evaluateOne(input, peerAveragePer, currentStages, config))
+		List<StrategyEvaluationResult> results = valuationInputs.stream()
+				.map(input -> evaluateOne(input, peerAverageNormalizedPer))
 				.toList();
+
+		StrategyDecision decision = strategyDecisionEvaluator.evaluate(results, currentHoldingTicker, config);
+
+		return new StrategyEvaluation(results, decision);
 	}
 
 	private StrategyEvaluationResult evaluateOne(
-			PeerPerInput input,
-			BigDecimal peerAveragePer,
-			Map<String, StrategyStage> currentStages,
-			StrategyRuleConfig config
+			StrategyValuationInput input,
+			BigDecimal peerAverageNormalizedPer
 	) {
-		BigDecimal peerDiscount = peerDiscountCalculator.calculate(input.currentPer(), peerAveragePer);
-		StrategyStage currentStage = currentStages.getOrDefault(input.ticker(), StrategyStage.NONE);
-		StrategyDecision decision = strategyDecisionEvaluator.evaluate(currentStage, peerDiscount, config);
+		BigDecimal normalizedPer = input.normalizedPer();
+		BigDecimal peerDiscount = peerDiscountCalculator.calculate(normalizedPer, peerAverageNormalizedPer);
 
 		return new StrategyEvaluationResult(
 				input.ticker(),
 				input.currentPer(),
-				peerAveragePer,
-				peerDiscount,
-				currentStage,
-				decision
+				input.fiveYearAveragePer(),
+				normalizedPer,
+				peerAverageNormalizedPer,
+				peerDiscount
 		);
 	}
 }
-

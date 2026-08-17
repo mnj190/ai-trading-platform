@@ -1,6 +1,5 @@
 package com.mnj190.aitrading.portfolio;
 
-import com.mnj190.aitrading.strategy.StrategyStage;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -28,19 +27,22 @@ public class PositionState {
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 16)
-	private StrategyStage state;
+	private PositionStatus status;
 
 	@Column(nullable = false, precision = 19, scale = 6)
 	private BigDecimal quantity;
 
+	@Column(name = "average_price", nullable = false, precision = 19, scale = 4)
+	private BigDecimal averagePrice;
+
 	@Column(name = "invested_amount", nullable = false, precision = 19, scale = 4)
 	private BigDecimal investedAmount;
 
-	@Column(name = "strategy_version", nullable = false, length = 64)
+	@Column(name = "strategy_version", nullable = false, unique = true, length = 64)
 	private String strategyVersion;
 
-	@Column(name = "created_at", nullable = false)
-	private OffsetDateTime createdAt;
+	@Column(name = "opened_at", nullable = false)
+	private OffsetDateTime openedAt;
 
 	@Column(name = "updated_at", nullable = false)
 	private OffsetDateTime updatedAt;
@@ -50,14 +52,15 @@ public class PositionState {
 
 	public PositionState(
 			String ticker,
-			StrategyStage state,
 			BigDecimal quantity,
+			BigDecimal averagePrice,
 			BigDecimal investedAmount,
 			String strategyVersion
 	) {
 		this.ticker = ticker;
-		this.state = state;
+		this.status = PositionStatus.HOLDING;
 		this.quantity = quantity;
+		this.averagePrice = averagePrice;
 		this.investedAmount = investedAmount;
 		this.strategyVersion = strategyVersion;
 	}
@@ -65,7 +68,7 @@ public class PositionState {
 	@PrePersist
 	void prePersist() {
 		OffsetDateTime now = OffsetDateTime.now();
-		this.createdAt = now;
+		this.openedAt = now;
 		this.updatedAt = now;
 	}
 
@@ -82,12 +85,16 @@ public class PositionState {
 		return ticker;
 	}
 
-	public StrategyStage getState() {
-		return state;
+	public PositionStatus getStatus() {
+		return status;
 	}
 
 	public BigDecimal getQuantity() {
 		return quantity;
+	}
+
+	public BigDecimal getAveragePrice() {
+		return averagePrice;
 	}
 
 	public BigDecimal getInvestedAmount() {
@@ -98,17 +105,18 @@ public class PositionState {
 		return strategyVersion;
 	}
 
-	public OffsetDateTime getCreatedAt() {
-		return createdAt;
+	public OffsetDateTime getOpenedAt() {
+		return openedAt;
 	}
 
 	public OffsetDateTime getUpdatedAt() {
 		return updatedAt;
 	}
 
-	public void updateHolding(StrategyStage state, BigDecimal quantity, BigDecimal investedAmount) {
-		this.state = state;
+	public void updateHolding(String ticker, BigDecimal quantity, BigDecimal averagePrice, BigDecimal investedAmount) {
+		this.ticker = ticker;
 		this.quantity = quantity;
+		this.averagePrice = averagePrice;
 		this.investedAmount = investedAmount;
 	}
 }

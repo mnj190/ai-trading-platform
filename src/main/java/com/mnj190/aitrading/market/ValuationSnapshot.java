@@ -35,8 +35,14 @@ public class ValuationSnapshot {
 	@Column(name = "current_per", nullable = false, precision = 12, scale = 4)
 	private BigDecimal currentPer;
 
-	@Column(name = "peer_average_per", nullable = false, precision = 12, scale = 4)
-	private BigDecimal peerAveragePer;
+	@Column(name = "five_year_average_per", nullable = false, precision = 12, scale = 4)
+	private BigDecimal fiveYearAveragePer;
+
+	@Column(name = "normalized_per", nullable = false, precision = 12, scale = 4)
+	private BigDecimal normalizedPer;
+
+	@Column(name = "peer_average_normalized_per", nullable = false, precision = 12, scale = 4)
+	private BigDecimal peerAverageNormalizedPer;
 
 	@Column(name = "peer_discount", nullable = false, precision = 8, scale = 4)
 	private BigDecimal peerDiscount;
@@ -56,7 +62,9 @@ public class ValuationSnapshot {
 			BigDecimal closePrice,
 			BigDecimal ttmEps,
 			BigDecimal currentPer,
-			BigDecimal peerAveragePer,
+			BigDecimal fiveYearAveragePer,
+			BigDecimal normalizedPer,
+			BigDecimal peerAverageNormalizedPer,
 			BigDecimal peerDiscount,
 			String strategyVersion
 	) {
@@ -65,7 +73,9 @@ public class ValuationSnapshot {
 		this.closePrice = closePrice;
 		this.ttmEps = ttmEps;
 		this.currentPer = currentPer;
-		this.peerAveragePer = peerAveragePer;
+		this.fiveYearAveragePer = fiveYearAveragePer;
+		this.normalizedPer = normalizedPer;
+		this.peerAverageNormalizedPer = peerAverageNormalizedPer;
 		this.peerDiscount = peerDiscount;
 		this.strategyVersion = strategyVersion;
 	}
@@ -99,8 +109,16 @@ public class ValuationSnapshot {
 		return currentPer;
 	}
 
-	public BigDecimal getPeerAveragePer() {
-		return peerAveragePer;
+	public BigDecimal getFiveYearAveragePer() {
+		return fiveYearAveragePer;
+	}
+
+	public BigDecimal getNormalizedPer() {
+		return normalizedPer;
+	}
+
+	public BigDecimal getPeerAverageNormalizedPer() {
+		return peerAverageNormalizedPer;
 	}
 
 	public BigDecimal getPeerDiscount() {

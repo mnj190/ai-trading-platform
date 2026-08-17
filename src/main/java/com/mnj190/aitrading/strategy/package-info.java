@@ -1,5 +1,4 @@
 /**
- * Strategy evaluation rules such as peer average PER, BUY stages, and SELL decisions.
+ * Strategy evaluation rules for normalized PER based entry, switch, and exit decisions.
  */
 package com.mnj190.aitrading.strategy;
-

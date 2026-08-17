@@ -31,7 +31,9 @@ class ValuationSnapshotRepositoryTests {
 				new BigDecimal("180.0000"),
 				new BigDecimal("4.0000"),
 				new BigDecimal("45.0000"),
-				new BigDecimal("50.0000"),
+				new BigDecimal("60.0000"),
+				new BigDecimal("0.7500"),
+				new BigDecimal("1.0000"),
 				new BigDecimal("-0.1000"),
 				STRATEGY_VERSION
 		);
@@ -60,4 +62,3 @@ class ValuationSnapshotRepositoryTests {
 		assertThat(repository.existsById(saved.getId())).isFalse();
 	}
 }
-

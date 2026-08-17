@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -36,25 +37,24 @@ public class StrategyEvaluationRecorder {
 	public List<StrategyEvaluationResult> evaluateAndRecord(
 			LocalDate tradingDate,
 			List<StrategyValuationInput> valuationInputs,
-			Map<String, StrategyStage> currentStages,
+			Optional<String> currentHoldingTicker,
 			StrategyRuleConfig config,
 			String strategyVersion
 	) {
 		Objects.requireNonNull(tradingDate, "tradingDate must not be null");
 		Objects.requireNonNull(valuationInputs, "valuationInputs must not be null");
-		Objects.requireNonNull(currentStages, "currentStages must not be null");
+		Objects.requireNonNull(currentHoldingTicker, "currentHoldingTicker must not be null");
 		Objects.requireNonNull(config, "config must not be null");
 		if (strategyVersion == null || strategyVersion.isBlank()) {
 			throw new IllegalArgumentException("strategyVersion must not be blank");
 		}
 
-		List<StrategyEvaluationResult> results = strategyEvaluationService.evaluate(
-				valuationInputs.stream()
-						.map(StrategyValuationInput::toPeerPerInput)
-						.toList(),
-				currentStages,
+		StrategyEvaluation evaluation = strategyEvaluationService.evaluate(
+				valuationInputs,
+				currentHoldingTicker,
 				config
 		);
+		List<StrategyEvaluationResult> results = evaluation.results();
 
 		Map<String, StrategyValuationInput> inputsByTicker = valuationInputs.stream()
 				.collect(Collectors.toMap(StrategyValuationInput::ticker, Function.identity()));
@@ -80,7 +80,9 @@ public class StrategyEvaluationRecorder {
 				input.closePrice(),
 				input.ttmEps(),
 				result.currentPer(),
-				result.peerAveragePer(),
+				result.fiveYearAveragePer(),
+				result.normalizedPer(),
+				result.peerAverageNormalizedPer(),
 				result.peerDiscount(),
 				strategyVersion
 		);
