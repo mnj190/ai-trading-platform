@@ -42,7 +42,8 @@ public class KisOrderExecutionFillMapper {
 	private Optional<KisOrderExecutionFill> toFill(Map<?, ?> row, OffsetDateTime fallbackExecutedAt) {
 		Optional<String> brokerOrderId = firstText(row, "odno", "ODNO");
 		Optional<String> ticker = firstText(row, "pdno", "PDNO");
-		Optional<BigDecimal> executedQuantity = firstDecimal(
+		Optional<BigDecimal> orderedQuantity = firstDecimal(row, "ft_ord_qty", "FT_ORD_QTY");
+		Optional<BigDecimal> cumulativeExecutedQuantity = firstDecimal(
 				row,
 				"ft_ccld_qty",
 				"FT_CCLD_QTY",
@@ -59,9 +60,11 @@ public class KisOrderExecutionFillMapper {
 
 		if (brokerOrderId.isEmpty()
 				|| ticker.isEmpty()
-				|| executedQuantity.isEmpty()
+				|| orderedQuantity.isEmpty()
+				|| cumulativeExecutedQuantity.isEmpty()
 				|| executedPrice.isEmpty()
-				|| executedQuantity.get().compareTo(BigDecimal.ZERO) <= 0
+				|| orderedQuantity.get().compareTo(BigDecimal.ZERO) <= 0
+				|| cumulativeExecutedQuantity.get().compareTo(BigDecimal.ZERO) <= 0
 				|| executedPrice.get().compareTo(BigDecimal.ZERO) <= 0) {
 			return Optional.empty();
 		}
@@ -69,7 +72,8 @@ public class KisOrderExecutionFillMapper {
 		return Optional.of(new KisOrderExecutionFill(
 				brokerOrderId.get(),
 				ticker.get(),
-				executedQuantity.get(),
+				orderedQuantity.get(),
+				cumulativeExecutedQuantity.get(),
 				executedPrice.get(),
 				fallbackExecutedAt
 		));

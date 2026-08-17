@@ -7,7 +7,8 @@ import java.util.Objects;
 public record KisOrderExecutionFill(
 		String brokerOrderId,
 		String ticker,
-		BigDecimal executedQuantity,
+		BigDecimal orderedQuantity,
+		BigDecimal cumulativeExecutedQuantity,
 		BigDecimal executedPrice,
 		OffsetDateTime executedAt
 ) {
@@ -15,12 +16,16 @@ public record KisOrderExecutionFill(
 	public KisOrderExecutionFill {
 		requireNotBlank(brokerOrderId, "brokerOrderId");
 		requireNotBlank(ticker, "ticker");
-		Objects.requireNonNull(executedQuantity, "executedQuantity must not be null");
+		Objects.requireNonNull(orderedQuantity, "orderedQuantity must not be null");
+		Objects.requireNonNull(cumulativeExecutedQuantity, "cumulativeExecutedQuantity must not be null");
 		Objects.requireNonNull(executedPrice, "executedPrice must not be null");
 		Objects.requireNonNull(executedAt, "executedAt must not be null");
 
-		if (executedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
-			throw new IllegalArgumentException("executedQuantity must be greater than zero");
+		if (orderedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new IllegalArgumentException("orderedQuantity must be greater than zero");
+		}
+		if (cumulativeExecutedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new IllegalArgumentException("cumulativeExecutedQuantity must be greater than zero");
 		}
 		if (executedPrice.compareTo(BigDecimal.ZERO) <= 0) {
 			throw new IllegalArgumentException("executedPrice must be greater than zero");

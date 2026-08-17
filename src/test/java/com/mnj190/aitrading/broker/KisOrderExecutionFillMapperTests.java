@@ -2,7 +2,6 @@ package com.mnj190.aitrading.broker;
 
 import org.junit.jupiter.api.Test;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +24,7 @@ class KisOrderExecutionFillMapperTests {
 						"odno", "0000000001",
 						"pdno", "NVDA",
 						"sll_buy_dvsn_cd", "02",
+						"ft_ord_qty", "5",
 						"ft_ccld_qty", "2",
 						"ft_ccld_unpr3", "180.1200"
 				)),
@@ -38,14 +38,15 @@ class KisOrderExecutionFillMapperTests {
 				.satisfies(fill -> {
 					assertThat(fill.brokerOrderId()).isEqualTo("0000000001");
 					assertThat(fill.ticker()).isEqualTo("NVDA");
-					assertThat(fill.executedQuantity()).isEqualByComparingTo(new BigDecimal("2"));
+					assertThat(fill.orderedQuantity()).isEqualByComparingTo("5");
+					assertThat(fill.cumulativeExecutedQuantity()).isEqualByComparingTo("2");
 					assertThat(fill.executedPrice()).isEqualByComparingTo("180.1200");
 					assertThat(fill.executedAt()).isEqualTo(fallbackExecutedAt);
 				});
 	}
 
 	@Test
-	void skipsRowsWithoutPositiveFillQuantity() {
+	void skipsRowsWithoutPositiveCumulativeFillQuantity() {
 		KisOverseasOrderExecutionResponse response = new KisOverseasOrderExecutionResponse(
 				"0",
 				"APBK0013",
@@ -53,7 +54,27 @@ class KisOrderExecutionFillMapperTests {
 				List.of(Map.of(
 						"odno", "0000000001",
 						"pdno", "NVDA",
+						"ft_ord_qty", "5",
 						"ft_ccld_qty", "0",
+						"ft_ccld_unpr3", "180.1200"
+				)),
+				"",
+				""
+		);
+
+		assertThat(mapper.toFills(response, OffsetDateTime.now())).isEmpty();
+	}
+
+	@Test
+	void skipsRowsWithoutOrderedQuantity() {
+		KisOverseasOrderExecutionResponse response = new KisOverseasOrderExecutionResponse(
+				"0",
+				"APBK0013",
+				"정상처리 되었습니다.",
+				List.of(Map.of(
+						"odno", "0000000001",
+						"pdno", "NVDA",
+						"ft_ccld_qty", "2",
 						"ft_ccld_unpr3", "180.1200"
 				)),
 				"",
