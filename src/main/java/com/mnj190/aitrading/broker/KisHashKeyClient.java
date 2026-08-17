@@ -3,6 +3,7 @@ package com.mnj190.aitrading.broker;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.Objects;
@@ -14,12 +15,18 @@ public class KisHashKeyClient {
 
 	private final KisApiProperties properties;
 	private final RestClient restClient;
+	private final ObjectMapper objectMapper;
 
-	public KisHashKeyClient(KisApiProperties properties, RestClient.Builder restClientBuilder) {
+	public KisHashKeyClient(
+			KisApiProperties properties,
+			RestClient.Builder restClientBuilder,
+			ObjectMapper objectMapper
+	) {
 		this.properties = Objects.requireNonNull(properties);
 		this.restClient = Objects.requireNonNull(restClientBuilder)
 				.baseUrl(properties.baseUrl())
 				.build();
+		this.objectMapper = Objects.requireNonNull(objectMapper);
 	}
 
 	public String issueHashKey(Map<String, String> body) {
@@ -32,7 +39,7 @@ public class KisHashKeyClient {
 				.accept(MediaType.APPLICATION_JSON)
 				.header("appkey", properties.appKey())
 				.header("appsecret", properties.appSecret())
-				.body(body)
+				.body(objectMapper.writeValueAsBytes(body))
 				.retrieve()
 				.body(KisHashKeyResponse.class);
 

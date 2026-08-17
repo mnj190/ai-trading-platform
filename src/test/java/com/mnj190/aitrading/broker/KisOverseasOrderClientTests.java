@@ -7,10 +7,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.matchesRegex;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -21,12 +23,13 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class KisOverseasOrderClientTests {
 
 	@Test
-	void placesPaperUsBuyOrderWithHashKeyAndRequiredHeaders() {
+	void placesPaperUsBuyOrderWithHashKeyAndRequiredHeadersAndExplicitContentLength() {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisApiProperties properties = properties(true);
-		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, builder);
-		KisOverseasOrderClient client = new KisOverseasOrderClient(properties, hashKeyClient, builder);
+		ObjectMapper objectMapper = new ObjectMapper();
+		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, builder, objectMapper);
+		KisOverseasOrderClient client = new KisOverseasOrderClient(properties, hashKeyClient, builder, objectMapper);
 
 		String expectedBody = """
 				{
@@ -46,6 +49,7 @@ class KisOverseasOrderClientTests {
 
 		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/hashkey"))
 				.andExpect(method(HttpMethod.POST))
+				.andExpect(header(HttpHeaders.CONTENT_LENGTH, matchesRegex("\\d+")))
 				.andExpect(content().json(expectedBody))
 				.andRespond(withSuccess("""
 						{
@@ -61,6 +65,7 @@ class KisOverseasOrderClientTests {
 				.andExpect(header("tr_id", "VTTT1002U"))
 				.andExpect(header("custtype", "P"))
 				.andExpect(header("hashkey", "hash-key-value"))
+				.andExpect(header(HttpHeaders.CONTENT_LENGTH, matchesRegex("\\d+")))
 				.andExpect(content().json(expectedBody))
 				.andRespond(withSuccess("""
 						{
@@ -91,8 +96,9 @@ class KisOverseasOrderClientTests {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisApiProperties properties = properties(false);
-		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, builder);
-		KisOverseasOrderClient client = new KisOverseasOrderClient(properties, hashKeyClient, builder);
+		ObjectMapper objectMapper = new ObjectMapper();
+		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, builder, objectMapper);
+		KisOverseasOrderClient client = new KisOverseasOrderClient(properties, hashKeyClient, builder, objectMapper);
 
 		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/hashkey"))
 				.andRespond(withSuccess("""

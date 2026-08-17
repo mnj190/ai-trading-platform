@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -41,6 +42,9 @@ class OrderSubmissionServiceTests {
 
 	@Autowired
 	private OrderHistoryRepository orderHistoryRepository;
+
+	@Autowired
+	private ObjectMapper objectMapper;
 
 	@Test
 	void submitsRequestedOrderAndStoresBrokerOrderId() {
@@ -155,11 +159,12 @@ class OrderSubmissionServiceTests {
 				"01",
 				true
 		);
-		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, restClientBuilder);
+		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, restClientBuilder, objectMapper);
 		KisOverseasOrderClient orderClient = new KisOverseasOrderClient(
 				properties,
 				hashKeyClient,
-				restClientBuilder
+				restClientBuilder,
+				objectMapper
 		);
 		OrderExecutionSafetyGuard safetyGuard = new OrderExecutionSafetyGuard(
 				properties,

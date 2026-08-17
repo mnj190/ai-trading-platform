@@ -1,10 +1,12 @@
 package com.mnj190.aitrading.broker;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
@@ -19,15 +21,19 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class KisHashKeyClientTests {
 
 	@Test
-	void issuesHashKeyForPostBody() {
+	void issuesHashKeyForPostBodyWithExplicitContentLength() {
 		RestClient.Builder builder = RestClient.builder();
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-		KisHashKeyClient client = new KisHashKeyClient(properties(), builder);
+		ObjectMapper objectMapper = new ObjectMapper();
+		KisHashKeyClient client = new KisHashKeyClient(properties(), builder, objectMapper);
+		Map<String, String> requestBody = Map.of("PDNO", "NVDA", "ORD_QTY", "1");
+		String expectedContentLength = String.valueOf(objectMapper.writeValueAsBytes(requestBody).length);
 
 		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/hashkey"))
 				.andExpect(method(HttpMethod.POST))
 				.andExpect(header("appkey", "test-key"))
 				.andExpect(header("appsecret", "test-secret"))
+				.andExpect(header(HttpHeaders.CONTENT_LENGTH, expectedContentLength))
 				.andExpect(content().json("""
 						{
 						  "PDNO": "NVDA",
@@ -40,10 +46,7 @@ class KisHashKeyClientTests {
 						}
 						""", MediaType.APPLICATION_JSON));
 
-		String hashKey = client.issueHashKey(Map.of(
-				"PDNO", "NVDA",
-				"ORD_QTY", "1"
-		));
+		String hashKey = client.issueHashKey(requestBody);
 
 		assertThat(hashKey).isEqualTo("hash-key-value");
 		server.verify();

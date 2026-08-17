@@ -5,6 +5,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.Objects;
@@ -21,17 +22,20 @@ public class KisOverseasOrderClient {
 	private final KisApiProperties properties;
 	private final KisHashKeyClient hashKeyClient;
 	private final RestClient restClient;
+	private final ObjectMapper objectMapper;
 
 	public KisOverseasOrderClient(
 			KisApiProperties properties,
 			KisHashKeyClient hashKeyClient,
-			RestClient.Builder restClientBuilder
+			RestClient.Builder restClientBuilder,
+			ObjectMapper objectMapper
 	) {
 		this.properties = Objects.requireNonNull(properties);
 		this.hashKeyClient = Objects.requireNonNull(hashKeyClient);
 		this.restClient = Objects.requireNonNull(restClientBuilder)
 				.baseUrl(properties.baseUrl())
 				.build();
+		this.objectMapper = Objects.requireNonNull(objectMapper);
 	}
 
 	public KisOverseasOrderResponse placeOrder(
@@ -66,7 +70,7 @@ public class KisOverseasOrderClient {
 				.header("tr_id", trId(side))
 				.header("custtype", "P")
 				.header("hashkey", hashKey)
-				.body(body)
+				.body(objectMapper.writeValueAsBytes(body))
 				.retrieve()
 				.body(KisOverseasOrderResponse.class);
 
