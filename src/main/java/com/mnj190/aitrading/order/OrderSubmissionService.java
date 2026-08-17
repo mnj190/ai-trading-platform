@@ -54,7 +54,7 @@ public class OrderSubmissionService {
 
 		String brokerOrderId = response.brokerOrderId()
 				.orElseThrow(() -> new IllegalStateException("KIS order response does not contain broker order id"));
-		order.markSubmitted(brokerOrderId);
+		order.markSubmitted(brokerOrderId, command.orderQuantity());
 		return orderHistoryRepository.saveAndFlush(order);
 	}
 }

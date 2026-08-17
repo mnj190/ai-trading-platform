@@ -13,6 +13,7 @@ import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 
 @Entity
 @Table(name = "order_history", schema = "trading")
@@ -45,6 +46,12 @@ public class OrderHistory {
 
 	@Column(name = "broker_order_id", length = 128)
 	private String brokerOrderId;
+
+	@Column(name = "submitted_quantity", precision = 19, scale = 6)
+	private BigDecimal submittedQuantity;
+
+	@Column(name = "filled_quantity", nullable = false, precision = 19, scale = 6)
+	private BigDecimal filledQuantity = BigDecimal.ZERO;
 
 	@Enumerated(EnumType.STRING)
 	@Column(nullable = false, length = 32)
@@ -145,6 +152,14 @@ public class OrderHistory {
 		return brokerOrderId;
 	}
 
+	public BigDecimal getSubmittedQuantity() {
+		return submittedQuantity;
+	}
+
+	public BigDecimal getFilledQuantity() {
+		return filledQuantity;
+	}
+
 	public OrderStatus getStatus() {
 		return status;
 	}
@@ -165,16 +180,30 @@ public class OrderHistory {
 		return updatedAt;
 	}
 
-	public void markSubmitted(String brokerOrderId) {
+	public void markSubmitted(String brokerOrderId, BigDecimal submittedQuantity) {
 		if (brokerOrderId == null || brokerOrderId.isBlank()) {
 			throw new IllegalArgumentException("brokerOrderId must not be blank");
 		}
+		if (submittedQuantity == null || submittedQuantity.compareTo(BigDecimal.ZERO) <= 0) {
+			throw new IllegalArgumentException("submittedQuantity must be greater than zero");
+		}
 		this.brokerOrderId = brokerOrderId;
+		this.submittedQuantity = submittedQuantity;
 		this.status = OrderStatus.SUBMITTED;
 	}
 
-	public void markFilled() {
-		this.status = OrderStatus.FILLED;
+	public BigDecimal applyCumulativeFillDelta(BigDecimal reportedCumulativeFilledQuantity) {
+		Objects.requireNonNull(reportedCumulativeFilledQuantity, "reportedCumulativeFilledQuantity must not be null");
+		BigDecimal delta = reportedCumulativeFilledQuantity.subtract(filledQuantity);
+		if (delta.compareTo(BigDecimal.ZERO) <= 0) {
+			return BigDecimal.ZERO;
+		}
+		if (status != OrderStatus.SUBMITTED && status != OrderStatus.PARTIALLY_FILLED) {
+			throw new IllegalStateException("only SUBMITTED or PARTIALLY_FILLED orders can record new fills");
+		}
+		filledQuantity = filledQuantity.add(delta);
+		status = filledQuantity.compareTo(submittedQuantity) >= 0 ? OrderStatus.FILLED : OrderStatus.PARTIALLY_FILLED;
+		return delta;
 	}
 
 	public void markRejected() {

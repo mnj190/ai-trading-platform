@@ -42,14 +42,13 @@ class OrderHistoryRepositoryTests {
 		assertThat(saved.getCreatedAt()).isNotNull();
 		assertThat(saved.getUpdatedAt()).isNotNull();
 
-		saved.markSubmitted("KIS-ORDER-1");
+		saved.markSubmitted("KIS-ORDER-1", new BigDecimal("5.000000"));
 		repository.saveAndFlush(saved);
 
-		assertThat(repository.findByBrokerOrderId("KIS-ORDER-1"))
-				.isPresent()
-				.get()
-				.extracting(OrderHistory::getStatus)
-				.isEqualTo(OrderStatus.SUBMITTED);
+		OrderHistory reloaded = repository.findByBrokerOrderId("KIS-ORDER-1").orElseThrow();
+		assertThat(reloaded.getStatus()).isEqualTo(OrderStatus.SUBMITTED);
+		assertThat(reloaded.getSubmittedQuantity()).isEqualByComparingTo("5.000000");
+		assertThat(reloaded.getFilledQuantity()).isEqualByComparingTo("0");
 
 		List<OrderHistory> orders = repository.findByStrategyVersionOrderByOrderedAtAsc(STRATEGY_VERSION);
 		assertThat(orders).extracting(OrderHistory::getTicker).contains("NVDA");
