@@ -46,6 +46,26 @@ kis:
 
 이 runner는 `kis.api.paper-trading=true`일 때만 실행된다. 기본 주문은 AAPL 1주 지정가 매수이며, 현재가에서 1% buffer를 더한 가격을 limit price로 사용한다. `kis.smoke.order.limit-price`를 지정하면 해당 가격을 사용한다.
 
+5종목 현재가상세 조회 smoke:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-universe-price-detail-smoke --spring.main.web-application-type=none --kis.smoke.strategy.symbols=NVDA,GOOGL,AAPL,AMZN,MSFT'
+```
+
+5종목 valuation 계산/저장 smoke:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-strategy-valuation-smoke --spring.main.web-application-type=none --kis.smoke.strategy.symbols=NVDA,GOOGL,AAPL,AMZN,MSFT --kis.smoke.strategy.base-month=2026-08'
+```
+
+`kis-strategy-valuation-smoke`는 기본적으로 `trading.per_normalization_baseline`에 5종목의 `base_month`별 5년 평균 PER이 있어야 실행된다. baseline 없이 DB 저장 경로만 확인해야 할 때는 아래처럼 smoke 전용 fallback을 명시적으로 켠다.
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local,paper-secret,kis-strategy-valuation-smoke --spring.main.web-application-type=none --kis.smoke.strategy.symbols=NVDA,GOOGL,AAPL,AMZN,MSFT --kis.smoke.strategy.base-month=2026-08 --kis.smoke.strategy.allow-current-per-baseline=true --kis.smoke.strategy.strategy-version=PE_MEAN_REVERSION_V1_SMOKE'
+```
+
+이 fallback은 현재 PER을 임시 baseline으로 사용하므로 실제 투자 판단용 할인율이 아니다. 공개 repo에는 계좌별 수치나 secret 값을 기록하지 않는다.
+
 ## 방법 2: 환경변수
 
 터미널 세션에서만 값을 넣고 싶으면 환경변수를 사용한다.
@@ -114,6 +134,9 @@ KIS balance smoke test finished
 - 실행 결과는 성공/실패 여부와 KIS error code 정도만 남긴다.
 - 상세 수치는 개인 Obsidian vault에만 기록한다.
 - 2026-08-17 기준 현재가/매수가능금액/체결조회 API는 호출 가능했고, 주문 요청 POST는 KIS gateway routing error `EGW00202`로 실패했다.
+- 2026-08-18 기준 해외주식 현재가상세 API는 5종목 모두 호출 가능했고, 응답에서 가격/PER/EPS 필드를 읽을 수 있었다.
+- 2026-08-18 기준 valuation 계산/저장 경로는 smoke strategy version으로 확인됐다.
+- 실제 전략 할인율 계산에는 `per_normalization_baseline`의 5년 평균 PER 데이터가 필요하다.
 
 ## 1000원 주문 테스트 주의
 
