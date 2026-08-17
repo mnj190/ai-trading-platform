@@ -1,3 +1,5 @@
 spring:
   application:
     name: ai-trading-platform
+  profiles:
+    default: local

@@ -1,4 +1,50 @@
 HELP.md
+
+### OS ###
+.DS_Store
+Thumbs.db
+
+### Logs ###
+logs/
+*.log
+*.pid
+*.pid.lock
+hs_err_pid*
+replay_pid*
+
+### Environment / Secrets ###
+.env
+.env.*
+!.env.example
+.envrc
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+application-secret.yaml
+application-secret.yml
+application-*.secret.yaml
+application-*.secret.yml
+application-private.yaml
+application-private.yml
+application-*.private.yaml
+application-*.private.yml
+src/main/resources/application-local-override.yaml
+src/main/resources/application-local-override.yml
+src/main/resources/application-prod-override.yaml
+src/main/resources/application-prod-override.yml
+
+### Runtime / Local Data ###
+tmp/
+temp/
+*.tmp
+*.swp
+*.swo
+*.sqlite
+*.sqlite3
+*.db
+
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
