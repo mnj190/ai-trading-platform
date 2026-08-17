@@ -2,11 +2,13 @@ package com.mnj190.aitrading.order;
 
 import com.mnj190.aitrading.strategy.StrategyDecision;
 import com.mnj190.aitrading.strategy.StrategySignal;
+import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
+@Component
 public class OrderCandidateFactory {
 
 	public List<OrderCandidate> create(
