@@ -66,6 +66,27 @@ kis:
 
 이 fallback은 현재 PER을 임시 baseline으로 사용하므로 실제 투자 판단용 할인율이 아니다. 공개 repo에는 계좌별 수치나 secret 값을 기록하지 않는다.
 
+## 운영(prod) DB 기준 실제 일일 평가 실행
+
+`local`/`prod` 두 profile은 서로 다른 DB를 가리킨다. `local`은 기본적으로 `ai_trading_platform` DB(모의투자 스모크 데이터 포함)를 쓰고, `prod`는 `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` 환경변수로 지정한 DB를 쓴다. 운영용으로는 별도 로컬 DB(`ai_trading_platform_prod`)를 만들어 분리한다.
+
+```bash
+createdb ai_trading_platform_prod
+```
+
+`kis-daily-evaluation` profile은 5종목 현재가상세를 실제로 조회해서 `DailyEvaluationService`로 valuation/전략 판단/주문 요청까지 한 번에 실행하고 DB에 저장한다. `trading.per_normalization_baseline`이 해당 `base_month`에 미리 적재돼 있어야 한다.
+
+```bash
+DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="$USER" DB_PASSWORD="" \
+./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-daily-evaluation --spring.main.web-application-type=none'
+```
+
+- `secret` profile은 `config/application-secret.yaml`의 실전 KIS 앱키를 쓴다 (읽기 전용 시세 조회만 하므로 안전하다. 실제 주문 제출은 `OrderExecutionSafetyGuard`가 `trading.execution.allow-real-trading=true` 없이는 막는다).
+- `tradingDate`는 `America/New_York` 기준 오늘 날짜로 계산한다 — 한국 시간 오전에 실행하면 자연스럽게 "어제 미국 장" 날짜가 된다.
+- `kis.evaluation.available-cash` (기본 1000.0000), `kis.evaluation.strategy-version`, `kis.evaluation.symbols`로 조정 가능하다.
+
+이 runner는 아직 자동 스케줄러가 아니라 수동 실행 profile이다. 매일 자동 실행하려면 OS 레벨 스케줄러(cron/launchd)로 이 명령을 등록해야 한다.
+
 ## 방법 2: 환경변수
 
 터미널 세션에서만 값을 넣고 싶으면 환경변수를 사용한다.
