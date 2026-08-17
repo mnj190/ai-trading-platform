@@ -34,6 +34,7 @@ class PositionStateRepositoryTests {
 
 		assertThat(saved.getId()).isNotNull();
 		assertThat(repository.findByTickerAndStrategyVersion("NVDA", STRATEGY_VERSION)).isPresent();
+		assertThat(repository.findByStrategyVersion(STRATEGY_VERSION)).isPresent();
 
 		saved.updateHolding(
 				"AMZN",

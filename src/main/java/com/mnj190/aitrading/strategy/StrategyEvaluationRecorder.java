@@ -41,6 +41,23 @@ public class StrategyEvaluationRecorder {
 			StrategyRuleConfig config,
 			String strategyVersion
 	) {
+		return evaluateRecordAndReturn(
+				tradingDate,
+				valuationInputs,
+				currentHoldingTicker,
+				config,
+				strategyVersion
+		).results();
+	}
+
+	@Transactional
+	public StrategyEvaluation evaluateRecordAndReturn(
+			LocalDate tradingDate,
+			List<StrategyValuationInput> valuationInputs,
+			Optional<String> currentHoldingTicker,
+			StrategyRuleConfig config,
+			String strategyVersion
+	) {
 		Objects.requireNonNull(tradingDate, "tradingDate must not be null");
 		Objects.requireNonNull(valuationInputs, "valuationInputs must not be null");
 		Objects.requireNonNull(currentHoldingTicker, "currentHoldingTicker must not be null");
@@ -65,7 +82,7 @@ public class StrategyEvaluationRecorder {
 				.map(result -> toSnapshot(tradingDate, strategyVersion, result, inputsByTicker.get(result.ticker())))
 				.toList());
 
-		return results;
+		return evaluation;
 	}
 
 	private ValuationSnapshot toSnapshot(
