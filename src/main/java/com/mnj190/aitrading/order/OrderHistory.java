@@ -166,6 +166,9 @@ public class OrderHistory {
 	}
 
 	public void markSubmitted(String brokerOrderId) {
+		if (brokerOrderId == null || brokerOrderId.isBlank()) {
+			throw new IllegalArgumentException("brokerOrderId must not be blank");
+		}
 		this.brokerOrderId = brokerOrderId;
 		this.status = OrderStatus.SUBMITTED;
 	}

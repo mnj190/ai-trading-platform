@@ -78,6 +78,8 @@ class KisOverseasOrderClientTests {
 
 		assertThat(response.returnCode()).isEqualTo("0");
 		assertThat(response.message()).isEqualTo("정상처리 되었습니다.");
+		assertThat(response.isSuccess()).isTrue();
+		assertThat(response.brokerOrderId()).contains("0000000001");
 		server.verify();
 	}
 
