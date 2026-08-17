@@ -81,3 +81,12 @@ KIS balance smoke test finished
 - `output2` 계좌 요약 구조
 
 이 응답 구조를 확인한 뒤 실제 체결 조회 응답을 `trade_history`에 매핑한다.
+
+## 1000원 주문 테스트 주의
+
+- 현재 V1 주문 client는 해외주식 일반 주문 API를 사용한다.
+- 일반 미국 주식 주문은 우선 1주 단위 수량 계산을 기준으로 한다.
+- 1000원은 USD 기준으로 1달러 미만 수준이라 NVDA, GOOGL, AAPL, AMZN, MSFT 같은 V1 유니버스 종목은 수량이 0이 된다.
+- 따라서 실제 주문 테스트 전에는 현재가 조회와 주문 가능 금액 조회로 `quantity > 0`인지 먼저 확인해야 한다.
+- `paper-trading: true`일 때는 반드시 모의투자용 app key를 사용해야 한다.
+- 실전용 app key를 넣었다면 `paper-trading: false`와 실전 base url이 맞지만, 실제 주문은 별도 승인 없이 실행하지 않는다.
