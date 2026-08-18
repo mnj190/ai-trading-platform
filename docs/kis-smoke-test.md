@@ -76,6 +76,8 @@ createdb ai_trading_platform_prod
 
 `kis-daily-evaluation` profile은 5종목 현재가상세를 실제로 조회해서 `DailyEvaluationService`로 valuation/전략 판단/주문 요청까지 한 번에 실행하고 DB에 저장한다. `trading.per_normalization_baseline`이 해당 `base_month`에 미리 적재돼 있어야 한다.
 
+같은 실행에서 벤치마크(SPY, QQQM) 종가와 우리 계좌의 종가 기준 자산(`account_snapshot`: 현금 + 보유 종목 평가금액)도 함께 저장한다 — 수익률을 지수와 비교할 때 쓴다. `benchmark_snapshot`/`account_snapshot`은 날짜당 한 번만 기록하고, 같은 날 재실행해도 중복 저장하지 않는다.
+
 ```bash
 DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="$USER" DB_PASSWORD="" \
 ./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-daily-evaluation --spring.main.web-application-type=none'

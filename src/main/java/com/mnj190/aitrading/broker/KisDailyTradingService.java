@@ -1,5 +1,7 @@
 package com.mnj190.aitrading.broker;
 
+import com.mnj190.aitrading.market.BenchmarkSnapshot;
+import com.mnj190.aitrading.market.BenchmarkSnapshotRepository;
 import com.mnj190.aitrading.market.PerNormalizationBaseline;
 import com.mnj190.aitrading.market.PerNormalizationBaselineRepository;
 import com.mnj190.aitrading.order.OrderHistory;
@@ -7,6 +9,10 @@ import com.mnj190.aitrading.order.OrderSide;
 import com.mnj190.aitrading.order.OrderSubmissionCommand;
 import com.mnj190.aitrading.order.OrderSubmissionCommandFactory;
 import com.mnj190.aitrading.order.OrderSubmissionService;
+import com.mnj190.aitrading.portfolio.AccountSnapshot;
+import com.mnj190.aitrading.portfolio.AccountSnapshotRepository;
+import com.mnj190.aitrading.portfolio.PositionState;
+import com.mnj190.aitrading.portfolio.PositionStateRepository;
 import com.mnj190.aitrading.strategy.DailyEvaluationCommand;
 import com.mnj190.aitrading.strategy.DailyEvaluationReport;
 import com.mnj190.aitrading.strategy.DailyEvaluationService;
@@ -29,6 +35,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -44,6 +51,7 @@ public class KisDailyTradingService {
 	private static final Logger log = LoggerFactory.getLogger(KisDailyTradingService.class);
 	private static final ZoneId US_MARKET_ZONE = ZoneId.of("America/New_York");
 	private static final int RESULT_SCALE = 4;
+	private static final List<String> BENCHMARK_SYMBOLS = List.of("SPY", "QQQM");
 
 	private final KisAccessTokenProvider tokenProvider;
 	private final KisOverseasPriceDetailClient priceDetailClient;
@@ -54,6 +62,9 @@ public class KisDailyTradingService {
 	private final DailyEvaluationService dailyEvaluationService;
 	private final OrderSubmissionCommandFactory orderSubmissionCommandFactory;
 	private final OrderSubmissionService orderSubmissionService;
+	private final BenchmarkSnapshotRepository benchmarkSnapshotRepository;
+	private final AccountSnapshotRepository accountSnapshotRepository;
+	private final PositionStateRepository positionStateRepository;
 	private final List<String> symbols;
 	private final String strategyVersion;
 
@@ -67,6 +78,9 @@ public class KisDailyTradingService {
 			DailyEvaluationService dailyEvaluationService,
 			OrderSubmissionCommandFactory orderSubmissionCommandFactory,
 			OrderSubmissionService orderSubmissionService,
+			BenchmarkSnapshotRepository benchmarkSnapshotRepository,
+			AccountSnapshotRepository accountSnapshotRepository,
+			PositionStateRepository positionStateRepository,
 			@Value("${kis.evaluation.symbols:NVDA,GOOGL,AAPL,AMZN,MSFT}") String symbols,
 			@Value("${kis.evaluation.strategy-version:PE_MEAN_REVERSION_V1}") String strategyVersion
 	) {
@@ -79,6 +93,9 @@ public class KisDailyTradingService {
 		this.dailyEvaluationService = Objects.requireNonNull(dailyEvaluationService);
 		this.orderSubmissionCommandFactory = Objects.requireNonNull(orderSubmissionCommandFactory);
 		this.orderSubmissionService = Objects.requireNonNull(orderSubmissionService);
+		this.benchmarkSnapshotRepository = Objects.requireNonNull(benchmarkSnapshotRepository);
+		this.accountSnapshotRepository = Objects.requireNonNull(accountSnapshotRepository);
+		this.positionStateRepository = Objects.requireNonNull(positionStateRepository);
 		this.symbols = Arrays.stream(symbols.split(","))
 				.map(String::trim)
 				.filter(symbol -> !symbol.isBlank())
@@ -106,6 +123,9 @@ public class KisDailyTradingService {
 				.toList();
 		Map<String, StrategyValuationInput> inputsByTicker = inputs.stream()
 				.collect(Collectors.toMap(StrategyValuationInput::ticker, Function.identity()));
+
+		recordBenchmarkSnapshots(accessToken, tradingDate);
+		recordAccountSnapshot(tradingDate, availableCash, inputsByTicker);
 
 		DailyEvaluationReport report = dailyEvaluationService.evaluateAndCreateOrderRequests(new DailyEvaluationCommand(
 				tradingDate,
@@ -186,6 +206,59 @@ public class KisDailyTradingService {
 				submitted.getStatus(),
 				submitted.getBrokerOrderId(),
 				freshPrice
+		);
+	}
+
+	private void recordBenchmarkSnapshots(KisAccessToken accessToken, LocalDate tradingDate) {
+		for (String symbol : BENCHMARK_SYMBOLS) {
+			if (benchmarkSnapshotRepository.findByBenchmarkSymbolAndSnapshotDate(symbol, tradingDate).isPresent()) {
+				continue;
+			}
+			KisOverseasPriceDetailResponse response = priceDetailClient.inquireNasdaqPriceDetail(accessToken, symbol);
+			BigDecimal closePrice = inputMapper.closePrice(response, symbol);
+			benchmarkSnapshotRepository.save(new BenchmarkSnapshot(symbol, tradingDate, closePrice));
+			log.info("Recorded benchmark snapshot: symbol={}, tradingDate={}, closePrice={}", symbol, tradingDate, closePrice);
+			pauseBetweenKisRequests();
+		}
+	}
+
+	private void recordAccountSnapshot(
+			LocalDate tradingDate,
+			BigDecimal availableCash,
+			Map<String, StrategyValuationInput> inputsByTicker
+	) {
+		if (accountSnapshotRepository.findBySnapshotDate(tradingDate).isPresent()) {
+			return;
+		}
+
+		BigDecimal stockMarketValue = BigDecimal.ZERO;
+		BigDecimal unrealizedPnl = BigDecimal.ZERO;
+		Optional<PositionState> holding = positionStateRepository.findByStrategyVersion(strategyVersion);
+		if (holding.isPresent()) {
+			PositionState position = holding.get();
+			StrategyValuationInput input = inputsByTicker.get(position.getTicker());
+			if (input != null) {
+				stockMarketValue = position.getQuantity().multiply(input.closePrice());
+				unrealizedPnl = stockMarketValue.subtract(position.getInvestedAmount());
+			}
+		}
+		BigDecimal totalEquity = availableCash.add(stockMarketValue);
+
+		accountSnapshotRepository.save(new AccountSnapshot(
+				tradingDate,
+				totalEquity,
+				availableCash,
+				stockMarketValue,
+				unrealizedPnl,
+				"USD"
+		));
+		log.info(
+				"Recorded account snapshot: tradingDate={}, totalEquity={}, cashBalance={}, stockMarketValue={}, unrealizedPnl={}",
+				tradingDate,
+				totalEquity,
+				availableCash,
+				stockMarketValue,
+				unrealizedPnl
 		);
 	}
 
