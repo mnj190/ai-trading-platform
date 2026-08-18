@@ -1,4 +1,4 @@
-package com.mnj190.aitrading.order;
+package com.mnj190.aitrading.broker;
 
 public record ExecutionSyncReport(
 		int receivedFills,
