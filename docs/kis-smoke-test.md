@@ -96,8 +96,10 @@ DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="
 ./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-server --spring.main.web-application-type=none'
 ```
 
-- 기본 실행 시각은 매일 07:30(Asia/Seoul)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
-- 미국 장이 없는 날(주말 등)에도 매일 실행되지만, 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, `OrderRequestService`의 in-flight 주문 가드가 중복 주문 생성을 막는다.
+- 기본 실행 시각은 미국 동부시간(`America/New_York`) 기준 평일 09:35(정규장 개장 5분 후)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
+- `America/New_York` 시간대로 스케줄을 걸어서 서머타임이 바뀌어도 자동으로 개장 시각을 따라간다 (한국시간 고정 크론이었다면 서머타임 전환 때마다 1시간씩 밀렸을 것).
+- 종가 기반 할인률 계산은 장마감 이후 다음 개장 전까지 값이 바뀌지 않으므로, 계산과 매매 제출을 굳이 분리하지 않고 개장 직후 한 번에 실행한다 — 계산만 하고 매매를 못 하는(장마감 직후 실행 시 KIS가 "장종료"로 주문을 거부하는) 문제를 피한다.
+- 미국 공휴일처럼 장이 없는 평일에도 실행되지만, 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, `OrderRequestService`의 in-flight 주문 가드가 중복 주문 생성을 막는다.
 - 한 번의 스케줄 실행이 실패해도(KIS 오류, 네트워크 등) 예외를 잡아서 로그만 남기고, 프로세스는 계속 떠 있다가 다음날 다시 시도한다.
 - 이 프로세스를 계속 실행 상태로 두는 것 자체가 "시스템 가동"이다 — 별도의 on/off 스위치는 없고, 프로세스를 켜두면 매일 자동으로 평가·주문까지 실행된다.
 
