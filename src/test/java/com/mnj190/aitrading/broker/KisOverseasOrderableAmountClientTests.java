@@ -68,7 +68,7 @@ class KisOverseasOrderableAmountClientTests {
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisOverseasOrderableAmountClient client = new KisOverseasOrderableAmountClient(properties(false), builder);
 
-		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-psamount?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&OVRS_ORD_UNPR=225.13&ITEM_CD=AAPL"))
+		server.expect(once(), requestTo("https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-psamount?CANO=12345678&ACNT_PRDT_CD=01&OVRS_EXCG_CD=NASD&OVRS_ORD_UNPR=225.13&ITEM_CD=AAPL"))
 				.andExpect(header("tr_id", "TTTS3007R"))
 				.andRespond(withSuccess("""
 						{
@@ -99,7 +99,9 @@ class KisOverseasOrderableAmountClientTests {
 
 	private KisApiProperties properties(boolean paperTrading) {
 		return new KisApiProperties(
-				"https://openapivts.koreainvestment.com:29443",
+				paperTrading
+						? "https://openapivts.koreainvestment.com:29443"
+						: "https://openapi.koreainvestment.com:9443",
 				"test-key",
 				"test-secret",
 				"12345678",

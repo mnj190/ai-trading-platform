@@ -12,9 +12,24 @@ public record KisApiProperties(
 		boolean paperTrading
 ) {
 
+	private static final String PAPER_DOMAIN = "openapivts.koreainvestment.com";
+	private static final String REAL_DOMAIN = "openapi.koreainvestment.com";
+
 	public KisApiProperties {
 		if (baseUrl == null || baseUrl.isBlank()) {
 			throw new IllegalArgumentException("kis.api.base-url must not be blank");
+		}
+		boolean isPaperDomain = baseUrl.contains(PAPER_DOMAIN);
+		boolean isRealDomain = !isPaperDomain && baseUrl.contains(REAL_DOMAIN);
+		if (paperTrading && isRealDomain) {
+			throw new IllegalArgumentException(
+					"kis.api.paper-trading=true but kis.api.base-url looks like the real KIS domain: " + baseUrl
+			);
+		}
+		if (!paperTrading && isPaperDomain) {
+			throw new IllegalArgumentException(
+					"kis.api.paper-trading=false but kis.api.base-url looks like the paper-trading KIS domain: " + baseUrl
+			);
 		}
 	}
 

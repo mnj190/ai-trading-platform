@@ -83,7 +83,7 @@ class KisOverseasOrderExecutionClientTests {
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisOverseasOrderExecutionClient client = new KisOverseasOrderExecutionClient(properties(false), builder);
 
-		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-ccnl?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_STRT_DT=20260817&ORD_END_DT=20260817&SLL_BUY_DVSN=00&CCLD_NCCS_DVSN=00&OVRS_EXCG_CD=&SORT_SQN=DS&ORD_DT=&ORD_GNO_BRNO=&ODNO=&CTX_AREA_NK200=&CTX_AREA_FK200="))
+		server.expect(once(), requestTo("https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-ccnl?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_STRT_DT=20260817&ORD_END_DT=20260817&SLL_BUY_DVSN=00&CCLD_NCCS_DVSN=00&OVRS_EXCG_CD=&SORT_SQN=DS&ORD_DT=&ORD_GNO_BRNO=&ODNO=&CTX_AREA_NK200=&CTX_AREA_FK200="))
 				.andExpect(header("tr_id", "TTTS3035R"))
 				.andRespond(withSuccess("""
 						{
@@ -116,7 +116,9 @@ class KisOverseasOrderExecutionClientTests {
 
 	private KisApiProperties properties(boolean paperTrading) {
 		return new KisApiProperties(
-				"https://openapivts.koreainvestment.com:29443",
+				paperTrading
+						? "https://openapivts.koreainvestment.com:29443"
+						: "https://openapi.koreainvestment.com:9443",
 				"test-key",
 				"test-secret",
 				"12345678",

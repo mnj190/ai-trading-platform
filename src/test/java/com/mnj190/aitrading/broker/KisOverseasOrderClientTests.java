@@ -100,14 +100,14 @@ class KisOverseasOrderClientTests {
 		KisHashKeyClient hashKeyClient = new KisHashKeyClient(properties, builder, objectMapper);
 		KisOverseasOrderClient client = new KisOverseasOrderClient(properties, hashKeyClient, builder, objectMapper);
 
-		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/hashkey"))
+		server.expect(once(), requestTo("https://openapi.koreainvestment.com:9443/uapi/hashkey"))
 				.andRespond(withSuccess("""
 						{
 						  "HASH": "hash-key-value"
 						}
 						""", MediaType.APPLICATION_JSON));
 
-		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/order"))
+		server.expect(once(), requestTo("https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/order"))
 				.andExpect(header("tr_id", "TTTT1006U"))
 				.andRespond(withSuccess("""
 						{
@@ -139,7 +139,9 @@ class KisOverseasOrderClientTests {
 
 	private KisApiProperties properties(boolean paperTrading) {
 		return new KisApiProperties(
-				"https://openapivts.koreainvestment.com:29443",
+				paperTrading
+						? "https://openapivts.koreainvestment.com:29443"
+						: "https://openapi.koreainvestment.com:9443",
 				"test-key",
 				"test-secret",
 				"12345678",

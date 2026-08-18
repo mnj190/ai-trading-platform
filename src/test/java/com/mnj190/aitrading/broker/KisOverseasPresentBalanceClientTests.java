@@ -72,7 +72,7 @@ class KisOverseasPresentBalanceClientTests {
 		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
 		KisOverseasPresentBalanceClient client = new KisOverseasPresentBalanceClient(properties(false), builder);
 
-		server.expect(once(), requestTo("https://openapivts.koreainvestment.com:29443/uapi/overseas-stock/v1/trading/inquire-present-balance?CANO=12345678&ACNT_PRDT_CD=01&WCRC_FRCR_DVSN_CD=01&NATN_CD=000&TR_MKET_CD=00&INQR_DVSN_CD=00"))
+		server.expect(once(), requestTo("https://openapi.koreainvestment.com:9443/uapi/overseas-stock/v1/trading/inquire-present-balance?CANO=12345678&ACNT_PRDT_CD=01&WCRC_FRCR_DVSN_CD=01&NATN_CD=000&TR_MKET_CD=00&INQR_DVSN_CD=00"))
 				.andExpect(header("tr_id", "CTRP6504R"))
 				.andRespond(withSuccess("""
 						{
@@ -105,7 +105,9 @@ class KisOverseasPresentBalanceClientTests {
 
 	private KisApiProperties properties(boolean paperTrading) {
 		return new KisApiProperties(
-				"https://openapivts.koreainvestment.com:29443",
+				paperTrading
+						? "https://openapivts.koreainvestment.com:29443"
+						: "https://openapi.koreainvestment.com:9443",
 				"test-key",
 				"test-secret",
 				"12345678",
