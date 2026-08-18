@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,5 +43,31 @@ class PerNormalizationBaselineRepositoryTests {
 		repository.flush();
 
 		assertThat(repository.existsById(saved.getId())).isFalse();
+	}
+
+	@Test
+	void findsMostRecentPriorBaselineWhenExactMonthIsMissing() {
+		String ticker = "TEST_CARRYFWD";
+		PerNormalizationBaseline july = repository.saveAndFlush(new PerNormalizationBaseline(
+				ticker,
+				LocalDate.of(2026, 7, 1),
+				new BigDecimal("30.0000"),
+				5,
+				OffsetDateTime.now()
+		));
+		repository.saveAndFlush(new PerNormalizationBaseline(
+				ticker,
+				LocalDate.of(2026, 6, 1),
+				new BigDecimal("25.0000"),
+				5,
+				OffsetDateTime.now()
+		));
+
+		Optional<PerNormalizationBaseline> found = repository
+				.findFirstByTickerAndBaseMonthLessThanEqualOrderByBaseMonthDesc(ticker, LocalDate.of(2026, 8, 1));
+
+		assertThat(found).isPresent();
+		assertThat(found.get().getId()).isEqualTo(july.getId());
+		assertThat(found.get().getFiveYearAveragePer()).isEqualByComparingTo("30.0000");
 	}
 }

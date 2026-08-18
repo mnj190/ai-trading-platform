@@ -8,4 +8,9 @@ import java.util.Optional;
 public interface PerNormalizationBaselineRepository extends JpaRepository<PerNormalizationBaseline, Long> {
 
 	Optional<PerNormalizationBaseline> findByTickerAndBaseMonth(String ticker, LocalDate baseMonth);
+
+	Optional<PerNormalizationBaseline> findFirstByTickerAndBaseMonthLessThanEqualOrderByBaseMonthDesc(
+			String ticker,
+			LocalDate baseMonth
+	);
 }

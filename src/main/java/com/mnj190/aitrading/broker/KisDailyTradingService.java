@@ -56,6 +56,8 @@ public class KisDailyTradingService {
 	private final KisAccessTokenProvider tokenProvider;
 	private final KisOverseasPriceDetailClient priceDetailClient;
 	private final KisOverseasPresentBalanceClient presentBalanceClient;
+	private final KisOverseasOrderExecutionClient orderExecutionClient;
+	private final KisOrderExecutionSyncService orderExecutionSyncService;
 	private final KisPriceDetailValuationInputMapper inputMapper;
 	private final PerNormalizationBaselineRepository baselineRepository;
 	private final StrategyConfigRepository strategyConfigRepository;
@@ -72,6 +74,8 @@ public class KisDailyTradingService {
 			KisAccessTokenProvider tokenProvider,
 			KisOverseasPriceDetailClient priceDetailClient,
 			KisOverseasPresentBalanceClient presentBalanceClient,
+			KisOverseasOrderExecutionClient orderExecutionClient,
+			KisOrderExecutionSyncService orderExecutionSyncService,
 			KisPriceDetailValuationInputMapper inputMapper,
 			PerNormalizationBaselineRepository baselineRepository,
 			StrategyConfigRepository strategyConfigRepository,
@@ -87,6 +91,8 @@ public class KisDailyTradingService {
 		this.tokenProvider = Objects.requireNonNull(tokenProvider);
 		this.priceDetailClient = Objects.requireNonNull(priceDetailClient);
 		this.presentBalanceClient = Objects.requireNonNull(presentBalanceClient);
+		this.orderExecutionClient = Objects.requireNonNull(orderExecutionClient);
+		this.orderExecutionSyncService = Objects.requireNonNull(orderExecutionSyncService);
 		this.inputMapper = Objects.requireNonNull(inputMapper);
 		this.baselineRepository = Objects.requireNonNull(baselineRepository);
 		this.strategyConfigRepository = Objects.requireNonNull(strategyConfigRepository);
@@ -113,6 +119,10 @@ public class KisDailyTradingService {
 		);
 
 		KisAccessToken accessToken = tokenProvider.getAccessToken();
+
+		syncRecentExecutions(accessToken);
+		pauseBetweenKisRequests();
+
 		BigDecimal availableCash = resolveAvailableCashUsd(accessToken);
 		log.info("Resolved available cash from KIS present balance: {}", availableCash);
 		pauseBetweenKisRequests();
@@ -209,6 +219,38 @@ public class KisDailyTradingService {
 		);
 	}
 
+	private void syncRecentExecutions(KisAccessToken accessToken) {
+		LocalDate today = LocalDate.now();
+		LocalDate windowStart = today.minusDays(5);
+		KisOverseasOrderExecutionResponse response = orderExecutionClient.inquireExecutions(
+				accessToken,
+				new KisOverseasOrderExecutionRequest(
+						"",
+						windowStart,
+						today,
+						"00",
+						"00",
+						"",
+						"DS",
+						"",
+						"",
+						"",
+						"",
+						"",
+						""
+				)
+		);
+		ExecutionSyncReport report = orderExecutionSyncService.sync(response, OffsetDateTime.now());
+		log.info(
+				"Synced KIS executions: receivedFills={}, recordedFills={}, skippedUnknownOrders={}, skippedNonSubmittedOrders={}, skippedAlreadyUpToDate={}",
+				report.receivedFills(),
+				report.recordedFills(),
+				report.skippedUnknownOrders(),
+				report.skippedNonSubmittedOrders(),
+				report.skippedAlreadyUpToDate()
+		);
+	}
+
 	private void recordBenchmarkSnapshots(KisAccessToken accessToken, LocalDate tradingDate) {
 		for (String symbol : BENCHMARK_SYMBOLS) {
 			if (benchmarkSnapshotRepository.findByBenchmarkSymbolAndSnapshotDate(symbol, tradingDate).isPresent()) {
@@ -291,12 +333,28 @@ public class KisDailyTradingService {
 	private StrategyValuationInput toInput(KisAccessToken accessToken, String symbol, LocalDate baseMonth) {
 		KisOverseasPriceDetailResponse response = priceDetailClient.inquireNasdaqPriceDetail(accessToken, symbol);
 		pauseBetweenKisRequests();
-		PerNormalizationBaseline baseline = baselineRepository
-				.findByTickerAndBaseMonth(symbol, baseMonth)
-				.orElseThrow(() -> new IllegalStateException(
-						"missing PER normalization baseline for " + symbol + " and baseMonth " + baseMonth
-				));
+		PerNormalizationBaseline baseline = resolveBaseline(symbol, baseMonth);
 		return inputMapper.toInput(symbol, response, baseline.getFiveYearAveragePer());
+	}
+
+	private PerNormalizationBaseline resolveBaseline(String symbol, LocalDate baseMonth) {
+		Optional<PerNormalizationBaseline> exact = baselineRepository.findByTickerAndBaseMonth(symbol, baseMonth);
+		if (exact.isPresent()) {
+			return exact.get();
+		}
+		PerNormalizationBaseline carriedForward = baselineRepository
+				.findFirstByTickerAndBaseMonthLessThanEqualOrderByBaseMonthDesc(symbol, baseMonth)
+				.orElseThrow(() -> new IllegalStateException(
+						"no PER normalization baseline found for " + symbol + " at or before baseMonth " + baseMonth
+				));
+		log.warn(
+				"No PER normalization baseline for {} at baseMonth={}; carrying forward baseMonth={} (fiveYearAveragePer={}) instead. Recalculate and load a fresh baseline for this month when possible.",
+				symbol,
+				baseMonth,
+				carriedForward.getBaseMonth(),
+				carriedForward.getFiveYearAveragePer()
+		);
+		return carriedForward;
 	}
 
 	private void pauseBetweenKisRequests() {

@@ -78,6 +78,10 @@ createdb ai_trading_platform_prod
 
 같은 실행에서 벤치마크(SPY, QQQM) 종가와 우리 계좌의 종가 기준 자산(`account_snapshot`: 현금 + 보유 종목 평가금액)도 함께 저장한다 — 수익률을 지수와 비교할 때 쓴다. `benchmark_snapshot`/`account_snapshot`은 날짜당 한 번만 기록하고, 같은 날 재실행해도 중복 저장하지 않는다.
 
+실행 맨 처음에는 최근 5일치 KIS 체결내역을 조회해서 `KisOrderExecutionSyncService`로 동기화한다 — `SUBMITTED` 주문이 실제로 체결됐으면 `trade_history`/`position_state`를 갱신하고 주문 상태를 `FILLED`/`PARTIALLY_FILLED`로 바꾼다. 이게 없으면 체결이 확인 없이 `SUBMITTED`에 머물러서 다음 평가가 실제 보유 상태를 모른 채로 돈다.
+
+`per_normalization_baseline`에 이번 달 값이 없으면 즉시 실패하는 대신, 그 종목의 가장 최근 이전 달 값을 그대로 이월해서 쓴다(경고 로그 남김). 5년 평균 PER은 KIS API로 자동 계산할 수 없어서, 매달 정확한 값을 새로 넣기 전까지는 이 이월값으로 동작한다.
+
 ```bash
 DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="$USER" DB_PASSWORD="" \
 ./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-daily-evaluation --spring.main.web-application-type=none'
