@@ -32,8 +32,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 				"kis.api.account-product-code=01",
 				"kis.api.paper-trading=true",
 				"trading.execution.enabled=true",
-				"trading.execution.allow-real-trading=false",
-				"trading.execution.max-order-notional-amount=500.0000"
+				"trading.execution.allow-real-trading=false"
 })
 @Transactional
 class OrderSubmissionServiceTests {
@@ -168,7 +167,7 @@ class OrderSubmissionServiceTests {
 		);
 		OrderExecutionSafetyGuard safetyGuard = new OrderExecutionSafetyGuard(
 				properties,
-				new TradingExecutionProperties(true, false, new BigDecimal("500.0000"))
+				new TradingExecutionProperties(true, false)
 		);
 		return new OrderSubmissionService(orderHistoryRepository, orderClient, safetyGuard);
 	}

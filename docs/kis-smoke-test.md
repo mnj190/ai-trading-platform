@@ -138,19 +138,18 @@ kis:
 
 자동 주문 제출은 `OrderExecutionSafetyGuard`를 통과해야 한다.
 
-기본값:
+기본값(`local`/`prod` 공통):
 
 ```yaml
 trading:
   execution:
-    enabled: false
-    allow-real-trading: false
-    max-order-notional-amount: 500.0000
+    enabled: true
+    allow-real-trading: true
 ```
 
 - `trading.execution.enabled=false`이면 모의/실전 모두 주문 제출이 차단된다.
 - `kis.api.paper-trading=false`인 실전 주문은 `trading.execution.allow-real-trading=true`가 추가로 필요하다.
-- 주문 수량과 limit price를 곱한 금액이 `max-order-notional-amount`를 넘으면 제출이 차단된다.
+- 금액 상한(`max-order-notional-amount`)은 없다 — 전략 규칙(매수가능 최대 금액으로 전량 매수)과 안전장치가 서로 다른 상한을 갖는 게 오히려 혼란을 줄 수 있어서 제거했다. 실제 주문 크기는 `WholeShareOrderSizer`가 KIS 조회 잔고 안에서만 계산하므로 잔고 이상으로 나갈 수 없다.
 - 조회 API는 이 설정과 별개로 사용할 수 있다.
 
 ## 계좌 조회 결과

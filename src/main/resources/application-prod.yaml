@@ -29,4 +29,3 @@ trading:
   execution:
     enabled: ${TRADING_EXECUTION_ENABLED:true}
     allow-real-trading: ${TRADING_ALLOW_REAL_TRADING:true}
-    max-order-notional-amount: ${TRADING_MAX_ORDER_NOTIONAL_AMOUNT:1000.0000}

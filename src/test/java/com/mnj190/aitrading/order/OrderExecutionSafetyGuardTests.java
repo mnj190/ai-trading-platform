@@ -16,7 +16,7 @@ class OrderExecutionSafetyGuardTests {
 	void rejectsSubmissionWhenExecutionIsDisabled() {
 		OrderExecutionSafetyGuard guard = new OrderExecutionSafetyGuard(
 				kisProperties(true),
-				new TradingExecutionProperties(false, false, new BigDecimal("500.0000"))
+				new TradingExecutionProperties(false, false)
 		);
 
 		assertThatThrownBy(() -> guard.validate(order(), command("1", "100.00")))
@@ -28,7 +28,7 @@ class OrderExecutionSafetyGuardTests {
 	void rejectsRealTradingUnlessExplicitlyAllowed() {
 		OrderExecutionSafetyGuard guard = new OrderExecutionSafetyGuard(
 				kisProperties(false),
-				new TradingExecutionProperties(true, false, new BigDecimal("500.0000"))
+				new TradingExecutionProperties(true, false)
 		);
 
 		assertThatThrownBy(() -> guard.validate(order(), command("1", "100.00")))
@@ -37,22 +37,10 @@ class OrderExecutionSafetyGuardTests {
 	}
 
 	@Test
-	void rejectsOrderWhenNotionalAmountExceedsCap() {
+	void allowsPaperOrderWhenExecutionIsEnabled() {
 		OrderExecutionSafetyGuard guard = new OrderExecutionSafetyGuard(
 				kisProperties(true),
-				new TradingExecutionProperties(true, false, new BigDecimal("500.0000"))
-		);
-
-		assertThatThrownBy(() -> guard.validate(order(), command("2", "300.00")))
-				.isInstanceOf(IllegalStateException.class)
-				.hasMessageContaining("max-order-notional-amount");
-	}
-
-	@Test
-	void allowsPaperOrderWithinCapWhenExecutionIsEnabled() {
-		OrderExecutionSafetyGuard guard = new OrderExecutionSafetyGuard(
-				kisProperties(true),
-				new TradingExecutionProperties(true, false, new BigDecimal("500.0000"))
+				new TradingExecutionProperties(true, false)
 		);
 
 		assertThatCode(() -> guard.validate(order(), command("1", "100.00")))
@@ -60,10 +48,10 @@ class OrderExecutionSafetyGuardTests {
 	}
 
 	@Test
-	void allowsRealOrderWithinCapOnlyWhenExplicitlyAllowed() {
+	void allowsRealOrderOnlyWhenExplicitlyAllowed() {
 		OrderExecutionSafetyGuard guard = new OrderExecutionSafetyGuard(
 				kisProperties(false),
-				new TradingExecutionProperties(true, true, new BigDecimal("500.0000"))
+				new TradingExecutionProperties(true, true)
 		);
 
 		assertThatCode(() -> guard.validate(order(), command("1", "100.00")))

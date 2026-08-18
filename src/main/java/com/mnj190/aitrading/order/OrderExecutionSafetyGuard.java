@@ -3,7 +3,6 @@ package com.mnj190.aitrading.order;
 import com.mnj190.aitrading.broker.KisApiProperties;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
 import java.util.Objects;
 
 @Component
@@ -29,14 +28,6 @@ public class OrderExecutionSafetyGuard {
 		}
 		if (!kisApiProperties.paperTrading() && !executionProperties.allowRealTrading()) {
 			throw new IllegalStateException("real trading execution is not explicitly allowed");
-		}
-
-		BigDecimal notionalAmount = command.limitPrice().multiply(command.orderQuantity());
-		if (notionalAmount.compareTo(executionProperties.maxOrderNotionalAmount()) > 0) {
-			throw new IllegalStateException(
-					"order notional amount exceeds max-order-notional-amount: " + notionalAmount
-							+ " > " + executionProperties.maxOrderNotionalAmount()
-			);
 		}
 	}
 }
