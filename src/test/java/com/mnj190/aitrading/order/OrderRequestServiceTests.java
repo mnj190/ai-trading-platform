@@ -89,4 +89,28 @@ class OrderRequestServiceTests {
 		assertThat(buy.getOrderReason()).isEqualTo(OrderReason.SWITCH);
 		assertThat(buy.getRequestedAmount()).isEqualByComparingTo("1000.0000");
 	}
+
+	@Test
+	void skipsCreatingDuplicateEntryOrderWhileOneIsAlreadyInFlight() {
+		orderRequestService.createRequestedOrders(new OrderRequestCommand(
+				StrategyDecision.entry("NVDA"),
+				new BigDecimal("1000.0000"),
+				null,
+				BigDecimal.ZERO,
+				STRATEGY_VERSION,
+				OffsetDateTime.now()
+		));
+
+		List<OrderHistory> secondRun = orderRequestService.createRequestedOrders(new OrderRequestCommand(
+				StrategyDecision.entry("NVDA"),
+				new BigDecimal("1000.0000"),
+				null,
+				BigDecimal.ZERO,
+				STRATEGY_VERSION,
+				OffsetDateTime.now()
+		));
+
+		assertThat(secondRun).isEmpty();
+		assertThat(orderHistoryRepository.findByStrategyVersionOrderByOrderedAtAsc(STRATEGY_VERSION)).hasSize(1);
+	}
 }

@@ -28,6 +28,11 @@ public class KisPriceDetailValuationInputMapper {
 				.orElseThrow(() -> new IllegalStateException("KIS price detail does not contain perx for " + ticker));
 	}
 
+	public BigDecimal closePrice(KisOverseasPriceDetailResponse response, String ticker) {
+		Map<?, ?> output = extractOutput(response, ticker);
+		return closePrice(output, ticker);
+	}
+
 	private StrategyValuationInput toInput(
 			String ticker,
 			KisOverseasPriceDetailResponse response,
@@ -36,9 +41,7 @@ public class KisPriceDetailValuationInputMapper {
 	) {
 		Objects.requireNonNull(response, "response must not be null");
 		Objects.requireNonNull(fiveYearAveragePer, "fiveYearAveragePer must not be null");
-		BigDecimal closePrice = firstDecimal(output, "last")
-				.or(() -> firstDecimal(output, "base"))
-				.orElseThrow(() -> new IllegalStateException("KIS price detail does not contain price for " + ticker));
+		BigDecimal closePrice = closePrice(output, ticker);
 		BigDecimal currentPer = firstDecimal(output, "perx")
 				.orElseThrow(() -> new IllegalStateException("KIS price detail does not contain perx for " + ticker));
 		BigDecimal ttmEps = firstDecimal(output, "epsx")
@@ -51,6 +54,12 @@ public class KisPriceDetailValuationInputMapper {
 				currentPer,
 				fiveYearAveragePer
 		);
+	}
+
+	private BigDecimal closePrice(Map<?, ?> output, String ticker) {
+		return firstDecimal(output, "last")
+				.or(() -> firstDecimal(output, "base"))
+				.orElseThrow(() -> new IllegalStateException("KIS price detail does not contain price for " + ticker));
 	}
 
 	private Map<?, ?> extractOutput(KisOverseasPriceDetailResponse response, String ticker) {

@@ -10,4 +10,6 @@ public interface OrderHistoryRepository extends JpaRepository<OrderHistory, Long
 	List<OrderHistory> findByStrategyVersionOrderByOrderedAtAsc(String strategyVersion);
 
 	Optional<OrderHistory> findByBrokerOrderId(String brokerOrderId);
+
+	boolean existsByTickerAndStrategyVersionAndStatusIn(String ticker, String strategyVersion, List<OrderStatus> statuses);
 }

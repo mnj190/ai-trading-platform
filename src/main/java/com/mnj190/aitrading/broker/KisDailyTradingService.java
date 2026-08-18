@@ -1,0 +1,245 @@
+package com.mnj190.aitrading.broker;
+
+import com.mnj190.aitrading.market.PerNormalizationBaseline;
+import com.mnj190.aitrading.market.PerNormalizationBaselineRepository;
+import com.mnj190.aitrading.order.OrderHistory;
+import com.mnj190.aitrading.order.OrderSide;
+import com.mnj190.aitrading.order.OrderSubmissionCommand;
+import com.mnj190.aitrading.order.OrderSubmissionCommandFactory;
+import com.mnj190.aitrading.order.OrderSubmissionService;
+import com.mnj190.aitrading.strategy.DailyEvaluationCommand;
+import com.mnj190.aitrading.strategy.DailyEvaluationReport;
+import com.mnj190.aitrading.strategy.DailyEvaluationService;
+import com.mnj190.aitrading.strategy.StrategyConfig;
+import com.mnj190.aitrading.strategy.StrategyConfigRepository;
+import com.mnj190.aitrading.strategy.StrategyEvaluationResult;
+import com.mnj190.aitrading.strategy.StrategyValuationInput;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * Evaluates the V1 universe against real KIS data and submits any resulting
+ * orders. Shared by the on-demand {@code kis-daily-evaluation} runner and the
+ * {@code kis-server} scheduled trigger so both go through the exact same
+ * evaluate-then-submit path.
+ */
+@Component
+public class KisDailyTradingService {
+
+	private static final Logger log = LoggerFactory.getLogger(KisDailyTradingService.class);
+	private static final ZoneId US_MARKET_ZONE = ZoneId.of("America/New_York");
+	private static final int RESULT_SCALE = 4;
+
+	private final KisAccessTokenProvider tokenProvider;
+	private final KisOverseasPriceDetailClient priceDetailClient;
+	private final KisOverseasPresentBalanceClient presentBalanceClient;
+	private final KisPriceDetailValuationInputMapper inputMapper;
+	private final PerNormalizationBaselineRepository baselineRepository;
+	private final StrategyConfigRepository strategyConfigRepository;
+	private final DailyEvaluationService dailyEvaluationService;
+	private final OrderSubmissionCommandFactory orderSubmissionCommandFactory;
+	private final OrderSubmissionService orderSubmissionService;
+	private final List<String> symbols;
+	private final String strategyVersion;
+
+	public KisDailyTradingService(
+			KisAccessTokenProvider tokenProvider,
+			KisOverseasPriceDetailClient priceDetailClient,
+			KisOverseasPresentBalanceClient presentBalanceClient,
+			KisPriceDetailValuationInputMapper inputMapper,
+			PerNormalizationBaselineRepository baselineRepository,
+			StrategyConfigRepository strategyConfigRepository,
+			DailyEvaluationService dailyEvaluationService,
+			OrderSubmissionCommandFactory orderSubmissionCommandFactory,
+			OrderSubmissionService orderSubmissionService,
+			@Value("${kis.evaluation.symbols:NVDA,GOOGL,AAPL,AMZN,MSFT}") String symbols,
+			@Value("${kis.evaluation.strategy-version:PE_MEAN_REVERSION_V1}") String strategyVersion
+	) {
+		this.tokenProvider = Objects.requireNonNull(tokenProvider);
+		this.priceDetailClient = Objects.requireNonNull(priceDetailClient);
+		this.presentBalanceClient = Objects.requireNonNull(presentBalanceClient);
+		this.inputMapper = Objects.requireNonNull(inputMapper);
+		this.baselineRepository = Objects.requireNonNull(baselineRepository);
+		this.strategyConfigRepository = Objects.requireNonNull(strategyConfigRepository);
+		this.dailyEvaluationService = Objects.requireNonNull(dailyEvaluationService);
+		this.orderSubmissionCommandFactory = Objects.requireNonNull(orderSubmissionCommandFactory);
+		this.orderSubmissionService = Objects.requireNonNull(orderSubmissionService);
+		this.symbols = Arrays.stream(symbols.split(","))
+				.map(String::trim)
+				.filter(symbol -> !symbol.isBlank())
+				.toList();
+		this.strategyVersion = requireNotBlank(strategyVersion, "strategyVersion");
+	}
+
+	public void runOnce() {
+		LocalDate tradingDate = LocalDate.now(US_MARKET_ZONE);
+		log.info(
+				"Starting KIS daily evaluation: strategyVersion={}, symbols={}, tradingDate={}",
+				strategyVersion,
+				symbols,
+				tradingDate
+		);
+
+		KisAccessToken accessToken = tokenProvider.getAccessToken();
+		BigDecimal availableCash = resolveAvailableCashUsd(accessToken);
+		log.info("Resolved available cash from KIS present balance: {}", availableCash);
+		pauseBetweenKisRequests();
+
+		LocalDate baseMonth = YearMonth.from(tradingDate).atDay(1);
+		List<StrategyValuationInput> inputs = symbols.stream()
+				.map(symbol -> toInput(accessToken, symbol, baseMonth))
+				.toList();
+		Map<String, StrategyValuationInput> inputsByTicker = inputs.stream()
+				.collect(Collectors.toMap(StrategyValuationInput::ticker, Function.identity()));
+
+		DailyEvaluationReport report = dailyEvaluationService.evaluateAndCreateOrderRequests(new DailyEvaluationCommand(
+				tradingDate,
+				inputs,
+				availableCash,
+				strategyVersion,
+				OffsetDateTime.now()
+		));
+
+		report.evaluation().results().forEach(result -> log.info(
+				"KIS daily evaluation result: ticker={}, currentPer={}, fiveYearAveragePer={}, normalizedPer={}, peerAverageNormalizedPer={}, peerDiscount={}",
+				result.ticker(),
+				result.currentPer(),
+				result.fiveYearAveragePer(),
+				result.normalizedPer(),
+				result.peerAverageNormalizedPer(),
+				result.peerDiscount()
+		));
+		log.info("KIS daily evaluation decision: {}", report.evaluation().decision());
+		log.info("KIS daily evaluation requested orders: {}", report.requestedOrders().size());
+
+		BigDecimal entryThreshold = strategyConfigRepository.findByStrategyVersionAndEnabledTrue(strategyVersion)
+				.map(StrategyConfig::getEntryThreshold)
+				.orElseThrow(() -> new IllegalStateException("enabled strategy config not found: " + strategyVersion));
+		BigDecimal peerAverageNormalizedPer = report.evaluation().results().stream()
+				.findFirst()
+				.map(StrategyEvaluationResult::peerAverageNormalizedPer)
+				.orElse(null);
+
+		for (OrderHistory order : report.requestedOrders()) {
+			submitOrder(accessToken, order, inputsByTicker, peerAverageNormalizedPer, entryThreshold);
+			pauseBetweenKisRequests();
+		}
+
+		log.info("KIS daily evaluation finished");
+	}
+
+	private void submitOrder(
+			KisAccessToken accessToken,
+			OrderHistory order,
+			Map<String, StrategyValuationInput> inputsByTicker,
+			BigDecimal peerAverageNormalizedPer,
+			BigDecimal entryThreshold
+	) {
+		KisOverseasPriceDetailResponse freshResponse =
+				priceDetailClient.inquireNasdaqPriceDetail(accessToken, order.getTicker());
+		BigDecimal freshPrice = inputMapper.closePrice(freshResponse, order.getTicker());
+
+		if (order.getSide() == OrderSide.BUY) {
+			StrategyValuationInput baselineInput = inputsByTicker.get(order.getTicker());
+			BigDecimal freshCurrentPer = inputMapper.currentPer(freshResponse, order.getTicker());
+			BigDecimal freshNormalizedPer = freshCurrentPer.divide(
+					baselineInput.fiveYearAveragePer(),
+					RESULT_SCALE,
+					RoundingMode.HALF_UP
+			);
+			BigDecimal freshPeerDiscount = freshNormalizedPer
+					.divide(peerAverageNormalizedPer, RESULT_SCALE, RoundingMode.HALF_UP)
+					.subtract(BigDecimal.ONE);
+			if (freshPeerDiscount.compareTo(entryThreshold) > 0) {
+				log.warn(
+						"Skipping submission for {}: buy signal no longer valid on re-check, freshPeerDiscount={} > entryThreshold={}",
+						order.getTicker(),
+						freshPeerDiscount,
+						entryThreshold
+				);
+				return;
+			}
+			log.info("Buy signal re-confirmed for {}: freshPeerDiscount={}", order.getTicker(), freshPeerDiscount);
+		}
+
+		OrderSubmissionCommand command = orderSubmissionCommandFactory.create(order, accessToken, freshPrice);
+		OrderHistory submitted = orderSubmissionService.submit(command);
+		log.info(
+				"Submitted order: ticker={}, side={}, status={}, brokerOrderId={}, limitPrice={}",
+				submitted.getTicker(),
+				submitted.getSide(),
+				submitted.getStatus(),
+				submitted.getBrokerOrderId(),
+				freshPrice
+		);
+	}
+
+	private BigDecimal resolveAvailableCashUsd(KisAccessToken accessToken) {
+		KisOverseasPresentBalanceResponse response = presentBalanceClient.inquirePresentBalance(
+				accessToken,
+				KisOverseasPresentBalanceRequest.allForeignCurrency()
+		);
+		if (!"0".equals(response.returnCode())) {
+			throw new IllegalStateException(
+					"KIS present balance failed: " + response.messageCode() + " " + response.message()
+			);
+		}
+		if (!(response.output2() instanceof List<?> rows)) {
+			throw new IllegalStateException("KIS present balance output2 is not a list");
+		}
+		return rows.stream()
+				.filter(Map.class::isInstance)
+				.map(row -> (Map<?, ?>) row)
+				.filter(row -> "USD".equals(String.valueOf(row.get("crcy_cd"))))
+				.map(row -> row.get("frcr_dncl_amt_2"))
+				.filter(Objects::nonNull)
+				.map(value -> new BigDecimal(value.toString()))
+				.findFirst()
+				.orElseThrow(() -> new IllegalStateException(
+						"KIS present balance did not contain a USD frcr_dncl_amt_2 entry"
+				));
+	}
+
+	private StrategyValuationInput toInput(KisAccessToken accessToken, String symbol, LocalDate baseMonth) {
+		KisOverseasPriceDetailResponse response = priceDetailClient.inquireNasdaqPriceDetail(accessToken, symbol);
+		pauseBetweenKisRequests();
+		PerNormalizationBaseline baseline = baselineRepository
+				.findByTickerAndBaseMonth(symbol, baseMonth)
+				.orElseThrow(() -> new IllegalStateException(
+						"missing PER normalization baseline for " + symbol + " and baseMonth " + baseMonth
+				));
+		return inputMapper.toInput(symbol, response, baseline.getFiveYearAveragePer());
+	}
+
+	private void pauseBetweenKisRequests() {
+		try {
+			Thread.sleep(1_200);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("interrupted while waiting for KIS request throttle", ex);
+		}
+	}
+
+	private static String requireNotBlank(String value, String name) {
+		if (value == null || value.isBlank()) {
+			throw new IllegalArgumentException(name + " must not be blank");
+		}
+		return value;
+	}
+}

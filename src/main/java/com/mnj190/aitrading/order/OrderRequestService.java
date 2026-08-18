@@ -9,6 +9,9 @@ import java.util.Objects;
 @Service
 public class OrderRequestService {
 
+	private static final List<OrderStatus> IN_FLIGHT_STATUSES =
+			List.of(OrderStatus.REQUESTED, OrderStatus.SUBMITTED, OrderStatus.PARTIALLY_FILLED);
+
 	private final OrderCandidateFactory orderCandidateFactory;
 	private final OrderHistoryRepository orderHistoryRepository;
 
@@ -31,9 +34,18 @@ public class OrderRequestService {
 						command.currentHoldingMarketValue(),
 						command.strategyVersion()
 				).stream()
+				.filter(candidate -> !hasInFlightOrder(candidate.ticker(), command.strategyVersion()))
 				.map(candidate -> OrderHistory.fromCandidate(candidate, command.orderedAt()))
 				.toList();
 
 		return orderHistoryRepository.saveAllAndFlush(orders);
+	}
+
+	private boolean hasInFlightOrder(String ticker, String strategyVersion) {
+		return orderHistoryRepository.existsByTickerAndStrategyVersionAndStatusIn(
+				ticker,
+				strategyVersion,
+				IN_FLIGHT_STATUSES
+		);
 	}
 }

@@ -65,35 +65,26 @@ public class KisAccessTokenProvider {
 	}
 
 	private Optional<CachedAccessToken> readCachedFileToken(Instant now) {
-		if (!Files.exists(tokenCachePath)) {
+		Properties cacheProperties = loadCacheFile();
+		String prefix = cacheKey() + ".";
+		String accessToken = cacheProperties.getProperty(prefix + "accessToken");
+		if (accessToken == null) {
 			return Optional.empty();
 		}
-		try {
-			Properties cacheProperties = new Properties();
-			try (InputStream inputStream = Files.newInputStream(tokenCachePath)) {
-				cacheProperties.load(inputStream);
-			}
-			CachedAccessToken cache = new CachedAccessToken(
-					cacheProperties.getProperty("cacheKey"),
-					new KisAccessToken(
-							cacheProperties.getProperty("tokenType", ""),
-							cacheProperties.getProperty("accessToken"),
-							Long.parseLong(cacheProperties.getProperty("expiresIn", "0")),
-							cacheProperties.getProperty("accessTokenExpiredAt", "")
-					),
-					Instant.parse(cacheProperties.getProperty("expiresAt"))
-			);
-			if (!cacheKey().equals(cache.cacheKey())) {
-				return Optional.empty();
-			}
-			if (!now.isBefore(cache.expiresAt().minus(REFRESH_MARGIN))) {
-				return Optional.empty();
-			}
-			return Optional.of(cache);
-		}
-		catch (IOException ignored) {
+		CachedAccessToken cache = new CachedAccessToken(
+				cacheKey(),
+				new KisAccessToken(
+						cacheProperties.getProperty(prefix + "tokenType", ""),
+						accessToken,
+						Long.parseLong(cacheProperties.getProperty(prefix + "expiresIn", "0")),
+						cacheProperties.getProperty(prefix + "accessTokenExpiredAt", "")
+				),
+				Instant.parse(cacheProperties.getProperty(prefix + "expiresAt"))
+		);
+		if (!now.isBefore(cache.expiresAt().minus(REFRESH_MARGIN))) {
 			return Optional.empty();
 		}
+		return Optional.of(cache);
 	}
 
 	private void writeCachedFileToken(CachedAccessToken cache) {
@@ -102,20 +93,34 @@ public class KisAccessTokenProvider {
 			if (parent != null) {
 				Files.createDirectories(parent);
 			}
-			Properties cacheProperties = new Properties();
-			cacheProperties.setProperty("cacheKey", cache.cacheKey());
-			cacheProperties.setProperty("tokenType", cache.token().tokenType());
-			cacheProperties.setProperty("accessToken", cache.token().accessToken());
-			cacheProperties.setProperty("expiresIn", Long.toString(cache.token().expiresIn()));
-			cacheProperties.setProperty("accessTokenExpiredAt", cache.token().accessTokenExpiredAt());
-			cacheProperties.setProperty("expiresAt", cache.expiresAt().toString());
+			Properties cacheProperties = loadCacheFile();
+			String prefix = cache.cacheKey() + ".";
+			cacheProperties.setProperty(prefix + "tokenType", cache.token().tokenType());
+			cacheProperties.setProperty(prefix + "accessToken", cache.token().accessToken());
+			cacheProperties.setProperty(prefix + "expiresIn", Long.toString(cache.token().expiresIn()));
+			cacheProperties.setProperty(prefix + "accessTokenExpiredAt", cache.token().accessTokenExpiredAt());
+			cacheProperties.setProperty(prefix + "expiresAt", cache.expiresAt().toString());
 			try (OutputStream outputStream = Files.newOutputStream(tokenCachePath)) {
-				cacheProperties.store(outputStream, "KIS access token cache. Do not commit this file.");
+				cacheProperties.store(outputStream, "KIS access token cache. Do not commit this file. Keyed per base-url/app-key/account/paper-trading so paper and real tokens coexist.");
 			}
 		}
 		catch (IOException ex) {
 			throw new IllegalStateException("failed to write KIS access token cache", ex);
 		}
+	}
+
+	private Properties loadCacheFile() {
+		Properties cacheProperties = new Properties();
+		if (!Files.exists(tokenCachePath)) {
+			return cacheProperties;
+		}
+		try (InputStream inputStream = Files.newInputStream(tokenCachePath)) {
+			cacheProperties.load(inputStream);
+		}
+		catch (IOException ignored) {
+			return new Properties();
+		}
+		return cacheProperties;
 	}
 
 	private String cacheKey() {

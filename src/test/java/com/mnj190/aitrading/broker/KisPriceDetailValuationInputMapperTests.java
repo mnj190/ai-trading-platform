@@ -53,6 +53,22 @@ class KisPriceDetailValuationInputMapperTests {
 	}
 
 	@Test
+	void returnsClosePriceFromLastField() {
+		KisOverseasPriceDetailResponse response = new KisOverseasPriceDetailResponse(
+				"0",
+				"MCA00000",
+				"정상처리 되었습니다.",
+				Map.of(
+						"last", "226.2107",
+						"perx", "34.64",
+						"epsx", "6.53"
+				)
+		);
+
+		assertThat(mapper.closePrice(response, "NVDA")).isEqualByComparingTo("226.2107");
+	}
+
+	@Test
 	void rejectsFailedKisResponse() {
 		KisOverseasPriceDetailResponse response = new KisOverseasPriceDetailResponse(
 				"1",

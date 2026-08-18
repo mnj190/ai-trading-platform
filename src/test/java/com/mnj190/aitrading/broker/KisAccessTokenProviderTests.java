@@ -76,14 +76,47 @@ class KisAccessTokenProviderTests {
 		verify(tokenClient, times(1)).issueAccessToken();
 	}
 
+	@Test
+	void keepsSeparateCacheSlotsForDifferentTradingModes() {
+		Path tokenCachePath = tempDir.resolve("kis-token-cache.properties");
+		Clock clock = Clock.fixed(Instant.parse("2026-08-17T14:40:00Z"), ZoneOffset.UTC);
+
+		KisTokenClient paperTokenClient = mock(KisTokenClient.class);
+		KisAccessToken paperToken = new KisAccessToken("Bearer", "paper-token-value", 86400, "2026-08-18 22:00:00");
+		when(paperTokenClient.issueAccessToken()).thenReturn(paperToken);
+
+		KisTokenClient realTokenClient = mock(KisTokenClient.class);
+		KisAccessToken realToken = new KisAccessToken("Bearer", "real-token-value", 86400, "2026-08-18 22:00:00");
+		when(realTokenClient.issueAccessToken()).thenReturn(realToken);
+
+		new KisAccessTokenProvider(properties(true), paperTokenClient, clock, tokenCachePath).getAccessToken();
+		new KisAccessTokenProvider(properties(false), realTokenClient, clock, tokenCachePath).getAccessToken();
+
+		KisAccessToken cachedPaper = new KisAccessTokenProvider(properties(true), paperTokenClient, clock, tokenCachePath)
+				.getAccessToken();
+		KisAccessToken cachedReal = new KisAccessTokenProvider(properties(false), realTokenClient, clock, tokenCachePath)
+				.getAccessToken();
+
+		assertThat(cachedPaper.accessToken()).isEqualTo("paper-token-value");
+		assertThat(cachedReal.accessToken()).isEqualTo("real-token-value");
+		verify(paperTokenClient, times(1)).issueAccessToken();
+		verify(realTokenClient, times(1)).issueAccessToken();
+	}
+
 	private KisApiProperties properties() {
+		return properties(true);
+	}
+
+	private KisApiProperties properties(boolean paperTrading) {
 		return new KisApiProperties(
-				"https://openapivts.koreainvestment.com:29443",
+				paperTrading
+						? "https://openapivts.koreainvestment.com:29443"
+						: "https://openapi.koreainvestment.com:9443",
 				"test-key",
 				"test-secret",
 				"12345678",
 				"01",
-				true
+				paperTrading
 		);
 	}
 }

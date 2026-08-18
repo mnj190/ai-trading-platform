@@ -85,7 +85,21 @@ DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="
 - `tradingDate`는 `America/New_York` 기준 오늘 날짜로 계산한다 — 한국 시간 오전에 실행하면 자연스럽게 "어제 미국 장" 날짜가 된다.
 - `kis.evaluation.available-cash` (기본 1000.0000), `kis.evaluation.strategy-version`, `kis.evaluation.symbols`로 조정 가능하다.
 
-이 runner는 아직 자동 스케줄러가 아니라 수동 실행 profile이다. 매일 자동 실행하려면 OS 레벨 스케줄러(cron/launchd)로 이 명령을 등록해야 한다.
+`kis-daily-evaluation`은 1회 실행하고 종료하는 수동 profile이다. 매일 자동으로 돌게 하려면 아래 `kis-server` profile을 쓴다.
+
+## 상시 실행 (자동 스케줄러)
+
+`kis-server` profile은 프로세스를 종료하지 않고 계속 떠 있으면서, 매일 `KisDailyTradingService.runOnce()`(평가 → 요청 → 제출까지 전체)를 자동으로 실행한다. 내부적으로 `kis-daily-evaluation`과 완전히 같은 로직(`KisDailyTradingService`)을 쓴다 — 트리거 방식만 수동 vs 스케줄이다.
+
+```bash
+DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="$USER" DB_PASSWORD="" \
+./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-server --spring.main.web-application-type=none'
+```
+
+- 기본 실행 시각은 매일 07:30(Asia/Seoul)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
+- 미국 장이 없는 날(주말 등)에도 매일 실행되지만, 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, `OrderRequestService`의 in-flight 주문 가드가 중복 주문 생성을 막는다.
+- 한 번의 스케줄 실행이 실패해도(KIS 오류, 네트워크 등) 예외를 잡아서 로그만 남기고, 프로세스는 계속 떠 있다가 다음날 다시 시도한다.
+- 이 프로세스를 계속 실행 상태로 두는 것 자체가 "시스템 가동"이다 — 별도의 on/off 스위치는 없고, 프로세스를 켜두면 매일 자동으로 평가·주문까지 실행된다.
 
 ## 방법 2: 환경변수
 
@@ -166,6 +180,7 @@ KIS balance smoke test finished
 - KIS token 발급은 1분당 1회 제한이 있으므로, runner나 service는 `KisTokenClient`를 직접 호출하지 않고 provider를 사용한다.
 - token cache는 기본적으로 `tmp/kis-access-token-cache.properties`에 저장된다.
 - cache key에는 app key 원문을 저장하지 않고, base url/app key/account/paper 여부를 묶은 SHA-256 hash만 저장한다.
+- 파일 하나에 cache key별로 여러 슬롯을 저장한다 (`<cacheKey>.accessToken` 형태). 모의투자/실전처럼 서로 다른 설정을 오가며 실행해도 서로의 캐시를 덮어쓰지 않는다.
 - `tmp/`는 `.gitignore` 대상이므로 token cache 파일은 GitHub에 올라가지 않는다.
 
 ## 모의투자 주문 Smoke 결과 기록 원칙
