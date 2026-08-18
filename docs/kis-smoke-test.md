@@ -102,9 +102,10 @@ DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="
 ./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-server --spring.main.web-application-type=none'
 ```
 
-- 기본 실행 시각은 미국 동부시간(`America/New_York`) 기준 평일 09:35(정규장 개장 5분 후)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
-- `America/New_York` 시간대로 스케줄을 걸어서 서머타임이 바뀌어도 자동으로 개장 시각을 따라간다.
-- **알려진 트레이드오프**: 이 시각엔 이미 장이 열려 있어서, 할인률 계산에 쓰는 현재가가 "전날 정확한 종가"가 아니라 "그 순간의 실시간 시세"다. 계산(장마감 직후)과 제출(다음 장개장 시)을 분리하는 버전을 만들었다가, 매일 하루씩 밀리는 지연이 부담스러워서 다시 이 단순한 단일 단계 방식으로 되돌렸다. `evaluateAndRequest()`/`submitPendingOrders()` 메서드는 `KisDailyTradingService`에 그대로 남아있어서, 필요하면 나중에 다시 분리할 수 있다.
+- 기본 실행 시각은 미국 동부시간(`America/New_York`) 기준 평일 15:50(정규장 마감 10분 전)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
+- `America/New_York` 시간대로 스케줄을 걸어서 서머타임이 바뀌어도 자동으로 마감 시각을 따라간다.
+- **왜 마감 10분 전인가**: 이 시각엔 장이 아직 열려 있어서 신호가 나오면 바로 제출할 수 있다(다음 개장까지 기다릴 필요 없음, "장종료" 거부도 없음). 동시에 마감까지 10분밖에 안 남아서 이때 현재가는 그날 종가와 거의 같다. 장마감 직후 계산(정확하지만 다음 개장까지 제출 못 함, 하루 지연)과 장개장 직후 계산(바로 제출 가능하지만 종가와는 좀 더 먼 실시간가) 사이의 절충안이다.
+- `evaluateAndRequest()`/`submitPendingOrders()` 메서드는 `KisDailyTradingService`에 그대로 남아있어서, 필요하면 나중에 다시 분리할 수 있다.
 - 미국 공휴일처럼 장이 없는 평일에도 실행되지만, 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, `OrderRequestService`의 in-flight 주문 가드가 중복 주문 생성을 막는다.
 - 한 번의 스케줄 실행이 실패해도(KIS 오류, 네트워크 등) 예외를 잡아서 로그만 남기고, 프로세스는 계속 떠 있다가 다음날 다시 시도한다.
 - 이 프로세스를 계속 실행 상태로 두는 것 자체가 "시스템 가동"이다 — 별도의 on/off 스위치는 없고, 프로세스를 켜두면 매일 자동으로 평가·주문까지 실행된다.

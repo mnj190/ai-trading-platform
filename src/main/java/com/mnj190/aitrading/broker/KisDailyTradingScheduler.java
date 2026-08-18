@@ -11,14 +11,19 @@ import java.util.Objects;
 /**
  * Fires {@link KisDailyTradingService#runOnce()} automatically every US
  * market weekday while the app is left running under the {@code kis-server}
- * profile: evaluates and, if a signal fires, submits in one step, right
- * after the US regular session opens.
+ * profile: evaluates and, if a signal fires, submits in one step, 10
+ * minutes before the US regular session closes.
  * <p>
- * Note: at this trigger time the market has already been open a few
- * minutes, so the discount is computed off that moment's live quote, not
- * the prior session's settled close. A close-time-evaluate /
- * open-time-submit split (each phase run at the time it's actually valid)
- * was tried and reverted in favor of this simpler single-step design.
+ * This timing is a deliberate compromise: the market is still open, so a
+ * signal can be submitted immediately (no next-session wait, no "market
+ * closed" rejection), while the quote at that point is close enough to the
+ * day's eventual close for the discount calculation to be meaningful.
+ * Earlier designs tried computing right after close (correct price, but
+ * can't submit until the market reopens — a full day of latency) and right
+ * after the next open (can submit immediately, but the discount is priced
+ * off a live quote several minutes into the new session, not the prior
+ * close). This is close enough to the close to avoid most of that drift,
+ * without introducing next-session latency.
  */
 @Component
 @Profile("kis-server")
@@ -32,7 +37,7 @@ class KisDailyTradingScheduler {
 		this.dailyTradingService = Objects.requireNonNull(dailyTradingService);
 	}
 
-	@Scheduled(cron = "${kis.evaluation.schedule-cron:0 35 9 * * MON-FRI}", zone = "America/New_York")
+	@Scheduled(cron = "${kis.evaluation.schedule-cron:0 50 15 * * MON-FRI}", zone = "America/New_York")
 	void runScheduledEvaluation() {
 		try {
 			dailyTradingService.runOnce();
