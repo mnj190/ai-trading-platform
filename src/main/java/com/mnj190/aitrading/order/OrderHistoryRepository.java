@@ -12,4 +12,6 @@ public interface OrderHistoryRepository extends JpaRepository<OrderHistory, Long
 	Optional<OrderHistory> findByBrokerOrderId(String brokerOrderId);
 
 	boolean existsByTickerAndStrategyVersionAndStatusIn(String ticker, String strategyVersion, List<OrderStatus> statuses);
+
+	List<OrderHistory> findByStrategyVersionAndStatus(String strategyVersion, OrderStatus status);
 }

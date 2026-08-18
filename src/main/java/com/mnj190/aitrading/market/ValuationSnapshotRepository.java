@@ -22,6 +22,11 @@ public interface ValuationSnapshotRepository extends JpaRepository<ValuationSnap
 			String strategyVersion
 	);
 
+	Optional<ValuationSnapshot> findFirstByTickerAndStrategyVersionOrderByTradingDateDesc(
+			String ticker,
+			String strategyVersion
+	);
+
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query("""
 			delete from ValuationSnapshot snapshot

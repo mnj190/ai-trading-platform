@@ -4,8 +4,12 @@ import com.mnj190.aitrading.market.BenchmarkSnapshot;
 import com.mnj190.aitrading.market.BenchmarkSnapshotRepository;
 import com.mnj190.aitrading.market.PerNormalizationBaseline;
 import com.mnj190.aitrading.market.PerNormalizationBaselineRepository;
+import com.mnj190.aitrading.market.ValuationSnapshot;
+import com.mnj190.aitrading.market.ValuationSnapshotRepository;
 import com.mnj190.aitrading.order.OrderHistory;
+import com.mnj190.aitrading.order.OrderHistoryRepository;
 import com.mnj190.aitrading.order.OrderSide;
+import com.mnj190.aitrading.order.OrderStatus;
 import com.mnj190.aitrading.order.OrderSubmissionCommand;
 import com.mnj190.aitrading.order.OrderSubmissionCommandFactory;
 import com.mnj190.aitrading.order.OrderSubmissionService;
@@ -18,7 +22,6 @@ import com.mnj190.aitrading.strategy.DailyEvaluationReport;
 import com.mnj190.aitrading.strategy.DailyEvaluationService;
 import com.mnj190.aitrading.strategy.StrategyConfig;
 import com.mnj190.aitrading.strategy.StrategyConfigRepository;
-import com.mnj190.aitrading.strategy.StrategyEvaluationResult;
 import com.mnj190.aitrading.strategy.StrategyValuationInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,8 +45,18 @@ import java.util.stream.Collectors;
 /**
  * Evaluates the V1 universe against real KIS data and submits any resulting
  * orders. Shared by the on-demand {@code kis-daily-evaluation} runner and the
- * {@code kis-server} scheduled trigger so both go through the exact same
- * evaluate-then-submit path.
+ * {@code kis-server} scheduled trigger.
+ * <p>
+ * Split into two phases because "종가 기준" only holds between close and the
+ * next open: {@link #evaluateAndRequest()} must run while the market is
+ * closed (current-price-detail == the just-closed session's close at that
+ * point) to compute the discount and create a REQUESTED order.
+ * {@link #submitPendingOrders()} runs once the market is actually open, when
+ * a real order can be placed, and re-checks the signal against a fresh price
+ * before submitting. Running both back-to-back (via {@link #runOnce()}) is
+ * only correct for manual/ad-hoc testing while the market is closed —
+ * running it after the open, as one combined step, would price the discount
+ * off live intraday trading instead of the prior close.
  */
 @Component
 public class KisDailyTradingService {
@@ -61,6 +74,8 @@ public class KisDailyTradingService {
 	private final KisPriceDetailValuationInputMapper inputMapper;
 	private final PerNormalizationBaselineRepository baselineRepository;
 	private final StrategyConfigRepository strategyConfigRepository;
+	private final ValuationSnapshotRepository valuationSnapshotRepository;
+	private final OrderHistoryRepository orderHistoryRepository;
 	private final DailyEvaluationService dailyEvaluationService;
 	private final OrderSubmissionCommandFactory orderSubmissionCommandFactory;
 	private final OrderSubmissionService orderSubmissionService;
@@ -79,6 +94,8 @@ public class KisDailyTradingService {
 			KisPriceDetailValuationInputMapper inputMapper,
 			PerNormalizationBaselineRepository baselineRepository,
 			StrategyConfigRepository strategyConfigRepository,
+			ValuationSnapshotRepository valuationSnapshotRepository,
+			OrderHistoryRepository orderHistoryRepository,
 			DailyEvaluationService dailyEvaluationService,
 			OrderSubmissionCommandFactory orderSubmissionCommandFactory,
 			OrderSubmissionService orderSubmissionService,
@@ -96,6 +113,8 @@ public class KisDailyTradingService {
 		this.inputMapper = Objects.requireNonNull(inputMapper);
 		this.baselineRepository = Objects.requireNonNull(baselineRepository);
 		this.strategyConfigRepository = Objects.requireNonNull(strategyConfigRepository);
+		this.valuationSnapshotRepository = Objects.requireNonNull(valuationSnapshotRepository);
+		this.orderHistoryRepository = Objects.requireNonNull(orderHistoryRepository);
 		this.dailyEvaluationService = Objects.requireNonNull(dailyEvaluationService);
 		this.orderSubmissionCommandFactory = Objects.requireNonNull(orderSubmissionCommandFactory);
 		this.orderSubmissionService = Objects.requireNonNull(orderSubmissionService);
@@ -109,10 +128,27 @@ public class KisDailyTradingService {
 		this.strategyVersion = requireNotBlank(strategyVersion, "strategyVersion");
 	}
 
+	/**
+	 * Manual/ad-hoc convenience: runs both phases back-to-back. Only gives a
+	 * correct close-based discount when called while the market is closed —
+	 * the scheduler calls {@link #evaluateAndRequest()} and
+	 * {@link #submitPendingOrders()} separately, at the times each is valid.
+	 */
 	public void runOnce() {
+		evaluateAndRequest();
+		submitPendingOrders();
+	}
+
+	/**
+	 * Must run while the market is closed. Computes each ticker's discount
+	 * off its current price-detail quote (== the just-closed session's close
+	 * while the market is shut) and creates a REQUESTED order if the signal
+	 * fires. Does not submit anything — the market isn't open yet.
+	 */
+	public void evaluateAndRequest() {
 		LocalDate tradingDate = LocalDate.now(US_MARKET_ZONE);
 		log.info(
-				"Starting KIS daily evaluation: strategyVersion={}, symbols={}, tradingDate={}",
+				"Starting KIS close-based evaluation: strategyVersion={}, symbols={}, tradingDate={}",
 				strategyVersion,
 				symbols,
 				tradingDate
@@ -156,44 +192,57 @@ public class KisDailyTradingService {
 		));
 		log.info("KIS daily evaluation decision: {}", report.evaluation().decision());
 		log.info("KIS daily evaluation requested orders: {}", report.requestedOrders().size());
+		log.info("Close-based evaluation finished; orders (if any) wait for the next market open to submit");
+	}
 
+	/**
+	 * Must run while the market is open. Picks up any REQUESTED orders,
+	 * re-checks each against a fresh live quote, and submits if the signal
+	 * still holds.
+	 */
+	public void submitPendingOrders() {
+		List<OrderHistory> pending = orderHistoryRepository.findByStrategyVersionAndStatus(
+				strategyVersion,
+				OrderStatus.REQUESTED
+		);
+		log.info("Starting KIS pending order submission: strategyVersion={}, pendingOrders={}", strategyVersion, pending.size());
+		if (pending.isEmpty()) {
+			log.info("No pending orders to submit");
+			return;
+		}
+
+		KisAccessToken accessToken = tokenProvider.getAccessToken();
 		BigDecimal entryThreshold = strategyConfigRepository.findByStrategyVersionAndEnabledTrue(strategyVersion)
 				.map(StrategyConfig::getEntryThreshold)
 				.orElseThrow(() -> new IllegalStateException("enabled strategy config not found: " + strategyVersion));
-		BigDecimal peerAverageNormalizedPer = report.evaluation().results().stream()
-				.findFirst()
-				.map(StrategyEvaluationResult::peerAverageNormalizedPer)
-				.orElse(null);
 
-		for (OrderHistory order : report.requestedOrders()) {
-			submitOrder(accessToken, order, inputsByTicker, peerAverageNormalizedPer, entryThreshold);
+		for (OrderHistory order : pending) {
+			submitOrder(accessToken, order, entryThreshold);
 			pauseBetweenKisRequests();
 		}
 
-		log.info("KIS daily evaluation finished");
+		log.info("KIS pending order submission finished");
 	}
 
-	private void submitOrder(
-			KisAccessToken accessToken,
-			OrderHistory order,
-			Map<String, StrategyValuationInput> inputsByTicker,
-			BigDecimal peerAverageNormalizedPer,
-			BigDecimal entryThreshold
-	) {
+	private void submitOrder(KisAccessToken accessToken, OrderHistory order, BigDecimal entryThreshold) {
 		KisOverseasPriceDetailResponse freshResponse =
 				priceDetailClient.inquireNasdaqPriceDetail(accessToken, order.getTicker());
 		BigDecimal freshPrice = inputMapper.closePrice(freshResponse, order.getTicker());
 
 		if (order.getSide() == OrderSide.BUY) {
-			StrategyValuationInput baselineInput = inputsByTicker.get(order.getTicker());
+			ValuationSnapshot lastEvaluation = valuationSnapshotRepository
+					.findFirstByTickerAndStrategyVersionOrderByTradingDateDesc(order.getTicker(), strategyVersion)
+					.orElseThrow(() -> new IllegalStateException(
+							"no valuation_snapshot found for " + order.getTicker() + " to re-check before submission"
+					));
 			BigDecimal freshCurrentPer = inputMapper.currentPer(freshResponse, order.getTicker());
 			BigDecimal freshNormalizedPer = freshCurrentPer.divide(
-					baselineInput.fiveYearAveragePer(),
+					lastEvaluation.getFiveYearAveragePer(),
 					RESULT_SCALE,
 					RoundingMode.HALF_UP
 			);
 			BigDecimal freshPeerDiscount = freshNormalizedPer
-					.divide(peerAverageNormalizedPer, RESULT_SCALE, RoundingMode.HALF_UP)
+					.divide(lastEvaluation.getPeerAverageNormalizedPer(), RESULT_SCALE, RoundingMode.HALF_UP)
 					.subtract(BigDecimal.ONE);
 			if (freshPeerDiscount.compareTo(entryThreshold) > 0) {
 				log.warn(

@@ -95,19 +95,22 @@ DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="
 
 ## 상시 실행 (자동 스케줄러)
 
-`kis-server` profile은 프로세스를 종료하지 않고 계속 떠 있으면서, 매일 `KisDailyTradingService.runOnce()`(평가 → 요청 → 제출까지 전체)를 자동으로 실행한다. 내부적으로 `kis-daily-evaluation`과 완전히 같은 로직(`KisDailyTradingService`)을 쓴다 — 트리거 방식만 수동 vs 스케줄이다.
+`kis-server` profile은 프로세스를 종료하지 않고 계속 떠 있으면서, `KisDailyTradingService`의 두 단계를 서로 다른 시각에 자동으로 실행한다.
 
 ```bash
 DB_URL="jdbc:postgresql://127.0.0.1:5432/ai_trading_platform_prod" DB_USERNAME="$USER" DB_PASSWORD="" \
 ./gradlew bootRun --args='--spring.profiles.active=prod,secret,kis-server --spring.main.web-application-type=none'
 ```
 
-- 기본 실행 시각은 미국 동부시간(`America/New_York`) 기준 평일 09:35(정규장 개장 5분 후)이다. `kis.evaluation.schedule-cron`으로 변경 가능하다 (cron 표현식).
-- `America/New_York` 시간대로 스케줄을 걸어서 서머타임이 바뀌어도 자동으로 개장 시각을 따라간다 (한국시간 고정 크론이었다면 서머타임 전환 때마다 1시간씩 밀렸을 것).
-- 종가 기반 할인률 계산은 장마감 이후 다음 개장 전까지 값이 바뀌지 않으므로, 계산과 매매 제출을 굳이 분리하지 않고 개장 직후 한 번에 실행한다 — 계산만 하고 매매를 못 하는(장마감 직후 실행 시 KIS가 "장종료"로 주문을 거부하는) 문제를 피한다.
-- 미국 공휴일처럼 장이 없는 평일에도 실행되지만, 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, `OrderRequestService`의 in-flight 주문 가드가 중복 주문 생성을 막는다.
-- 한 번의 스케줄 실행이 실패해도(KIS 오류, 네트워크 등) 예외를 잡아서 로그만 남기고, 프로세스는 계속 떠 있다가 다음날 다시 시도한다.
-- 이 프로세스를 계속 실행 상태로 두는 것 자체가 "시스템 가동"이다 — 별도의 on/off 스위치는 없고, 프로세스를 켜두면 매일 자동으로 평가·주문까지 실행된다.
+**왜 두 단계로 나눴는가**: `KisOverseasPriceDetailClient`의 "현재가"는 장이 닫혀있을 때만 종가와 같다. 장이 열린 뒤에 조회하면 그 순간의 실시간 시세라서, 개장 직후에 계산까지 같이 하면 할인률이 "어제 종가"가 아니라 "오늘 개장 몇 분 후 시세" 기준이 돼버린다. 그래서 계산(장마감 직후)과 제출(다음 장개장 시)을 분리했다.
+
+- **`evaluateAndRequest()`** — 미국 동부시간 기준 평일 16:05(정규장 마감 5분 후, `kis.evaluation.close-schedule-cron`으로 변경 가능)에 실행. 이 시점의 현재가는 곧 그날 종가이므로, 이 값으로 할인률을 계산해서 `valuation_snapshot`에 저장하고 신호가 나오면 `order_history`에 `REQUESTED`로만 저장한다. 제출은 하지 않는다(장이 닫혀 있음).
+- **`submitPendingOrders()`** — 미국 동부시간 기준 평일 09:35(정규장 개장 5분 후, `kis.evaluation.open-schedule-cron`으로 변경 가능)에 실행. `REQUESTED` 주문을 찾아서 그 시점의 실시간 현재가로 다시 조회하고, 매수라면 `valuation_snapshot`에 저장해둔 `peer_average_normalized_per`를 기준으로 할인률이 여전히 유효한지 재확인한 뒤 그 가격 그대로 지정가로 제출한다.
+- 두 트리거 모두 `America/New_York` 시간대로 걸어서 서머타임이 바뀌어도 자동으로 개장/마감 시각을 따라간다.
+- 미국 공휴일처럼 장이 없는 평일에도 실행되지만 안전하게 무해한 no-op이 된다 — `valuation_snapshot`은 같은 날짜로 덮어써지고, 제출 단계는 대기 중인 `REQUESTED` 주문이 없으면 그냥 끝난다.
+- 한쪽 스케줄 실행이 실패해도(KIS 오류, 네트워크 등) 예외를 잡아서 로그만 남기고, 프로세스는 계속 떠 있다가 다음 스케줄에 다시 시도한다.
+- `kis-daily-evaluation`(수동 profile)은 `runOnce()`를 쓰는데, 이건 두 단계를 곧바로 이어서 실행하는 편의 메서드다 — **장이 닫혀 있을 때 수동으로 테스트할 때만** 올바른 종가 기준 계산이 된다. 장이 열린 뒤에 `kis-daily-evaluation`을 실행하면 마찬가지로 실시간 시세를 종가처럼 쓰게 된다.
+- 이 프로세스를 계속 실행 상태로 두는 것 자체가 "시스템 가동"이다 — 별도의 on/off 스위치는 없고, 프로세스를 켜두면 두 스케줄이 각자 알아서 돈다.
 
 ## 방법 2: 환경변수
 

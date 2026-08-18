@@ -58,4 +58,37 @@ class OrderHistoryRepositoryTests {
 
 		assertThat(repository.existsById(saved.getId())).isFalse();
 	}
+
+	@Test
+	void findsOrdersByStrategyVersionAndStatus() {
+		String strategyVersion = "PE_MEAN_REVERSION_V1_PENDING_TEST";
+		OrderHistory requested = repository.saveAndFlush(new OrderHistory(
+				"AMZN",
+				OrderSide.BUY,
+				OrderReason.ENTRY,
+				new BigDecimal("1000.0000"),
+				null,
+				OrderType.MARKET,
+				OrderStatus.REQUESTED,
+				strategyVersion,
+				OffsetDateTime.now()
+		));
+		OrderHistory submitted = new OrderHistory(
+				"NVDA",
+				OrderSide.BUY,
+				OrderReason.ENTRY,
+				new BigDecimal("1000.0000"),
+				null,
+				OrderType.MARKET,
+				OrderStatus.REQUESTED,
+				strategyVersion,
+				OffsetDateTime.now()
+		);
+		submitted.markSubmitted("KIS-ORDER-PENDING-TEST", new BigDecimal("2.000000"));
+		repository.saveAndFlush(submitted);
+
+		List<OrderHistory> pending = repository.findByStrategyVersionAndStatus(strategyVersion, OrderStatus.REQUESTED);
+
+		assertThat(pending).extracting(OrderHistory::getId).containsExactly(requested.getId());
+	}
 }
