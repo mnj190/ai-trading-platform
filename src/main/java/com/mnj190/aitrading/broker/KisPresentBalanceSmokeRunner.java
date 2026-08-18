@@ -37,11 +37,22 @@ class KisPresentBalanceSmokeRunner implements ApplicationRunner {
 				accessToken,
 				KisOverseasPresentBalanceRequest.allWon()
 		));
+		pauseBetweenKisRequests();
 		logPresentBalance("Foreign Currency", presentBalanceClient.inquirePresentBalance(
 				accessToken,
 				KisOverseasPresentBalanceRequest.allForeignCurrency()
 		));
 		log.info("KIS present balance smoke test finished");
+	}
+
+	private void pauseBetweenKisRequests() {
+		try {
+			Thread.sleep(1_200);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("interrupted while waiting for KIS request throttle", ex);
+		}
 	}
 
 	private void logPresentBalance(String label, KisOverseasPresentBalanceResponse response) {
