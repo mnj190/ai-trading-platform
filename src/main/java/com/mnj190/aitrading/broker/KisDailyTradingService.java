@@ -65,6 +65,7 @@ public class KisDailyTradingService {
 	private static final ZoneId US_MARKET_ZONE = ZoneId.of("America/New_York");
 	private static final int RESULT_SCALE = 4;
 	private static final List<String> BENCHMARK_SYMBOLS = List.of("SPY", "QQQM");
+	private static final List<String> BENCHMARK_EXCHANGE_CODES = List.of("NAS", "AMEX", "NYSE");
 
 	private final KisAccessTokenProvider tokenProvider;
 	private final KisOverseasPriceDetailClient priceDetailClient;
@@ -305,12 +306,39 @@ public class KisDailyTradingService {
 			if (benchmarkSnapshotRepository.findByBenchmarkSymbolAndSnapshotDate(symbol, tradingDate).isPresent()) {
 				continue;
 			}
-			KisOverseasPriceDetailResponse response = priceDetailClient.inquireNasdaqPriceDetail(accessToken, symbol);
-			BigDecimal closePrice = inputMapper.closePrice(response, symbol);
-			benchmarkSnapshotRepository.save(new BenchmarkSnapshot(symbol, tradingDate, closePrice));
-			log.info("Recorded benchmark snapshot: symbol={}, tradingDate={}, closePrice={}", symbol, tradingDate, closePrice);
+			try {
+				BigDecimal closePrice = inquireCloseOnAnyExchange(accessToken, symbol);
+				benchmarkSnapshotRepository.save(new BenchmarkSnapshot(symbol, tradingDate, closePrice));
+				log.info("Recorded benchmark snapshot: symbol={}, tradingDate={}, closePrice={}", symbol, tradingDate, closePrice);
+			}
+			catch (IllegalStateException ex) {
+				log.error("Failed to record benchmark snapshot for {}; skipping it for today", symbol, ex);
+			}
 			pauseBetweenKisRequests();
 		}
+	}
+
+	/**
+	 * The V1 universe is confirmed NASDAQ-listed, but benchmark symbols
+	 * (e.g. SPY, an NYSE Arca ETF) may not be — tries each known US
+	 * exchange code in turn rather than assuming NASDAQ.
+	 */
+	private BigDecimal inquireCloseOnAnyExchange(KisAccessToken accessToken, String symbol) {
+		IllegalStateException lastError = null;
+		for (String exchangeCode : BENCHMARK_EXCHANGE_CODES) {
+			try {
+				KisOverseasPriceDetailResponse response = priceDetailClient.inquirePriceDetail(
+						accessToken,
+						new KisOverseasPriceDetailRequest("", exchangeCode, symbol, "")
+				);
+				return inputMapper.closePrice(response, symbol);
+			}
+			catch (IllegalStateException ex) {
+				lastError = ex;
+				pauseBetweenKisRequests();
+			}
+		}
+		throw new IllegalStateException("could not resolve a price for " + symbol + " on any of " + BENCHMARK_EXCHANGE_CODES, lastError);
 	}
 
 	private void recordAccountSnapshot(

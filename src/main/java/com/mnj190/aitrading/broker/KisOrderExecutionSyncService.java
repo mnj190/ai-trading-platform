@@ -6,6 +6,8 @@ import com.mnj190.aitrading.order.OrderStatus;
 import com.mnj190.aitrading.order.TradeExecutionCommand;
 import com.mnj190.aitrading.order.TradeExecutionService;
 import com.mnj190.aitrading.order.TradeHistory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +18,8 @@ import java.util.Optional;
 
 @Service
 public class KisOrderExecutionSyncService {
+
+	private static final Logger log = LoggerFactory.getLogger(KisOrderExecutionSyncService.class);
 
 	private final KisOrderExecutionFillMapper fillMapper;
 	private final OrderHistoryRepository orderHistoryRepository;
@@ -47,6 +51,13 @@ public class KisOrderExecutionSyncService {
 					.orElse(null);
 			if (order == null) {
 				unknown++;
+				log.warn(
+						"Skipping KIS fill with no matching order: brokerOrderId={}, ticker={}, cumulativeExecutedQuantity={}, executedPrice={}",
+						fill.brokerOrderId(),
+						fill.ticker(),
+						fill.cumulativeExecutedQuantity(),
+						fill.executedPrice()
+				);
 				continue;
 			}
 			if (order.getStatus() != OrderStatus.SUBMITTED && order.getStatus() != OrderStatus.PARTIALLY_FILLED) {
