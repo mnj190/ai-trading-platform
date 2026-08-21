@@ -157,7 +157,7 @@ public class KisDailyTradingService {
 
 		KisAccessToken accessToken = tokenProvider.getAccessToken();
 
-		syncRecentExecutions(accessToken);
+		runBestEffort("syncRecentExecutions", () -> syncRecentExecutions(accessToken));
 		pauseBetweenKisRequests();
 
 		BigDecimal availableCash = resolveAvailableCashUsd(accessToken);
@@ -171,8 +171,8 @@ public class KisDailyTradingService {
 		Map<String, StrategyValuationInput> inputsByTicker = inputs.stream()
 				.collect(Collectors.toMap(StrategyValuationInput::ticker, Function.identity()));
 
-		recordBenchmarkSnapshots(accessToken, tradingDate);
-		recordAccountSnapshot(tradingDate, availableCash, inputsByTicker);
+		runBestEffort("recordBenchmarkSnapshots", () -> recordBenchmarkSnapshots(accessToken, tradingDate));
+		runBestEffort("recordAccountSnapshot", () -> recordAccountSnapshot(tradingDate, availableCash, inputsByTicker));
 
 		DailyEvaluationReport report = dailyEvaluationService.evaluateAndCreateOrderRequests(new DailyEvaluationCommand(
 				tradingDate,
@@ -218,11 +218,31 @@ public class KisDailyTradingService {
 				.orElseThrow(() -> new IllegalStateException("enabled strategy config not found: " + strategyVersion));
 
 		for (OrderHistory order : pending) {
-			submitOrder(accessToken, order, entryThreshold);
+			try {
+				submitOrder(accessToken, order, entryThreshold);
+			}
+			catch (Exception ex) {
+				log.error("Failed to submit order for {}; leaving it REQUESTED for the next run", order.getTicker(), ex);
+			}
 			pauseBetweenKisRequests();
 		}
 
 		log.info("KIS pending order submission finished");
+	}
+
+	/**
+	 * Runs a step that isn't essential to producing today's trading signal
+	 * (benchmark/account snapshots, execution-history reconciliation) so a
+	 * failure there is logged and skipped instead of aborting the whole
+	 * evaluation before it reaches order creation.
+	 */
+	private void runBestEffort(String stepName, Runnable step) {
+		try {
+			step.run();
+		}
+		catch (Exception ex) {
+			log.error("Non-critical step '{}' failed; continuing without it", stepName, ex);
+		}
 	}
 
 	private void submitOrder(KisAccessToken accessToken, OrderHistory order, BigDecimal entryThreshold) {
