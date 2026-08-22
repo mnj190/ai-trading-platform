@@ -65,7 +65,7 @@ public class KisDailyTradingService {
 	private static final ZoneId US_MARKET_ZONE = ZoneId.of("America/New_York");
 	private static final int RESULT_SCALE = 4;
 	private static final List<String> BENCHMARK_SYMBOLS = List.of("SPY", "QQQM");
-	private static final List<String> BENCHMARK_EXCHANGE_CODES = List.of("NAS", "AMEX", "NYSE");
+	private static final List<String> BENCHMARK_EXCHANGE_CODES = List.of("NAS", "NYS", "AMS");
 
 	private final KisAccessTokenProvider tokenProvider;
 	private final KisOverseasPriceDetailClient priceDetailClient;
@@ -228,6 +228,13 @@ public class KisDailyTradingService {
 		}
 
 		log.info("KIS pending order submission finished");
+
+		// Orders submitted just now would otherwise wait until the next
+		// day's evaluateAndRequest() to have their fill confirmed via
+		// syncRecentExecutions(); check once more here since liquid-name
+		// limit-at-quote orders typically fill within seconds.
+		pauseBetweenKisRequests();
+		runBestEffort("syncRecentExecutions", () -> syncRecentExecutions(accessToken));
 	}
 
 	/**
